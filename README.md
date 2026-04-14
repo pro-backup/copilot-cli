@@ -1,3 +1,13 @@
+## Building from source
+
+```bash
+make build
+```
+
+This packages the Lambda custom resources (`npm ci` + minify) and compiles the Go binary to `./bin/local/copilot`.
+
+---
+
 ## :warning: Upcoming end-of-support :warning:
 
 AWS Copilot CLI will reach end-of-support on June 12, 2026. After this date, the tool will no longer receive updates, security patches, or technical support. We recommend migrating to alternative solutions as soon as possible to ensure continued support and access to the latest features.
