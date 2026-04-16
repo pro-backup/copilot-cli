@@ -32,7 +32,7 @@ build-e2e: package-custom-resources compile-linux package-custom-resources-clean
 build-regression: package-custom-resources compile-linux package-custom-resources-clean
 
 .PHONY: release
-release: package-custom-resources compile-darwin compile-linux compile-windows package-custom-resources-clean
+release: package-custom-resources compile-darwin compile-linux package-custom-resources-clean
 
 .PHONY: release-docker
 release-docker:
@@ -45,10 +45,6 @@ release-docker:
 .PHONY: compile-local
 compile-local:
 	CGO_ENABLED=0 go build -ldflags "${LINKER_FLAGS}" -o ${DESTINATION} ./cmd/copilot
-
-.PHONY: compile-windows
-compile-windows:
-	CGO_ENABLED=0 GOOS=windows GOARCH=386 go build -ldflags "${LINKER_FLAGS} ${RELEASE_BUILD_LINKER_FLAGS}" -o ${DESTINATION}.exe ./cmd/copilot
 
 .PHONY: compile-linux
 compile-linux:

@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 	"time"
@@ -46,21 +47,27 @@ func TestRecursiveWatcher(t *testing.T) {
 			Op:   fsnotify.Rename,
 		},
 		{
-			Name: filepath.ToSlash(filepath.Join(tmp, "watch/subdir2")),
-			Op:   fsnotify.Create,
-		},
-		{
 			Name: filepath.ToSlash(filepath.Join(tmp, "watch/subdir2/testfile")),
 			Op:   fsnotify.Rename,
 		},
 		{
 			Name: filepath.ToSlash(filepath.Join(tmp, "watch/subdir2/testfile2")),
-			Op:   fsnotify.Create,
-		},
-		{
-			Name: filepath.ToSlash(filepath.Join(tmp, "watch/subdir2/testfile2")),
 			Op:   fsnotify.Remove,
 		},
+	}
+	// On macOS (kqueue), renames also emit Create events for the new name.
+	// On Linux (inotify), only Rename events for the old name are emitted.
+	if runtime.GOOS == "darwin" {
+		eventsExpected = append(eventsExpected,
+			fsnotify.Event{
+				Name: filepath.ToSlash(filepath.Join(tmp, "watch/subdir2")),
+				Op:   fsnotify.Create,
+			},
+			fsnotify.Event{
+				Name: filepath.ToSlash(filepath.Join(tmp, "watch/subdir2/testfile2")),
+				Op:   fsnotify.Create,
+			},
+		)
 	}
 
 	t.Run("Setup Watcher", func(t *testing.T) {
@@ -118,11 +125,20 @@ func TestRecursiveWatcher(t *testing.T) {
 
 		err = os.Rename(filepath.Join(tmp, "watch/subdir"), filepath.Join(tmp, "watch/subdir2"))
 		require.NoError(t, err)
-		expectNextEvents(2)
+		// On macOS, renames emit both Rename (old) and Create (new); on Linux only Rename.
+		if runtime.GOOS == "darwin" {
+			expectNextEvents(2)
+		} else {
+			expectNextEvents(1)
+		}
 
 		err = os.Rename(filepath.Join(tmp, "watch/subdir2/testfile"), filepath.Join(tmp, "watch/subdir2/testfile2"))
 		require.NoError(t, err)
-		expectNextEvents(2)
+		if runtime.GOOS == "darwin" {
+			expectNextEvents(2)
+		} else {
+			expectNextEvents(1)
+		}
 
 		err = os.Remove(filepath.Join(tmp, "watch/subdir2/testfile2"))
 		require.NoError(t, err)

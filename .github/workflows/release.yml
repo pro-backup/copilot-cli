@@ -60,4 +60,3 @@ jobs:
             bin/local/copilot-darwin-arm64
             bin/local/copilot-linux-amd64
             bin/local/copilot-linux-arm64
-            bin/local/copilot.exe

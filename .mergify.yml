@@ -2,7 +2,6 @@ queue_rules:
   - name: default
     conditions:
       - status-success=build (compile-linux)
-      - status-success=build (compile-windows)
       - status-success=build (compile-darwin)
       - status-success=test
       - status-success=staticcheck
@@ -16,7 +15,6 @@ pull_request_rules:
       - approved-reviews-by=@aws/aws-ecs-devx
       - -approved-reviews-by~=author
       - status-success=build (compile-linux)
-      - status-success=build (compile-windows)
       - status-success=build (compile-darwin)
       - status-success=test
       - status-success=staticcheck
@@ -40,7 +38,6 @@ pull_request_rules:
       - "#approved-reviews-by>=1"
       - "#changes-requested-reviews-by=0"
       - status-success=build (compile-linux)
-      - status-success=build (compile-windows)
       - status-success=build (compile-darwin)
       - status-success=test
       - status-success=staticcheck
