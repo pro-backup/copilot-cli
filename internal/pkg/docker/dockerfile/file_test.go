@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/moby/buildkit/frontend/dockerfile/instructions"
+	"github.com/moby/buildkit/frontend/dockerfile/linter"
 	"github.com/moby/buildkit/frontend/dockerfile/parser"
 
 	"github.com/spf13/afero"
@@ -114,7 +115,7 @@ EXPOSE 8080/tcp 5000`),
 			require.NoError(t, err)
 			ast, err := parser.Parse(bytes.NewReader(dat))
 			require.NoError(t, err)
-			stages, _, _ := instructions.Parse(ast.AST)
+			stages, _, _ := instructions.Parse(ast.AST, &linter.Linter{})
 
 			ports, err := New(fs, "./Dockerfile").GetExposedPorts()
 			if tc.wantedErr != nil {
@@ -251,7 +252,7 @@ HEALTHCHECK   CMD     ["a",    "b"]
 			require.NoError(t, err)
 			ast, err := parser.Parse(bytes.NewReader(dat))
 			require.NoError(t, err)
-			stages, _, _ := instructions.Parse(ast.AST)
+			stages, _, _ := instructions.Parse(ast.AST, &linter.Linter{})
 
 			hc, err := New(fs, "./Dockerfile").GetHealthCheck()
 
