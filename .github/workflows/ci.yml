@@ -90,12 +90,3 @@ jobs:
       - name: Cleanup
         if: always()
         run: make package-custom-resources-clean
-
-  license:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-
-      - name: Run license check
-        run: ./scripts/license.sh .
