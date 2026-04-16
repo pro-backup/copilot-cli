@@ -13,7 +13,7 @@
     "lint": "eslint lib",
     "build+test+package": "npm run build+test",
     "build+test": "npm run build && npm test",
-    "package": "minify lib -d ../internal/pkg/template/templates/custom-resources --builtIns false"
+    "package": "mkdir -p ../internal/pkg/template/templates/custom-resources && for f in lib/*.js; do terser \"$f\" --compress --mangle -o \"../internal/pkg/template/templates/custom-resources/$(basename $f)\"; done"
   },
   "keywords": [],
   "author": {
@@ -40,7 +40,6 @@
     "ansi-regex": ">=5.0.1",
     "aws-sdk-client-mock": "^4.1.0",
     "axios": ">=1.7.4",
-    "babel-minify": "^0.5.1",
     "eslint": "^7.16.0",
     "eslint-config-standard": "^16.0.2",
     "eslint-plugin-import": "^2.22.1",
@@ -56,6 +55,7 @@
     "nock": "^13.0.5",
     "set-value": ">=4.0.1",
     "sinon": "^17.0.1",
+    "terser": "^5.46.1",
     "tmpl": ">=1.0.5",
     "ts-jest": "^29.1.4",
     "ws": ">=7.5.10",
