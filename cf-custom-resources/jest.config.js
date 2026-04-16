@@ -8,4 +8,16 @@ module.exports = {
   testRegex: "(/test/.*|(\\.|/)(test|spec))\\.(ts|js)x?$",
   moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json", "node"],
   testEnvironment: "node",
+  collectCoverageFrom: [
+    "lib/**/*.js",
+    "!lib/**/node_modules/**",
+  ],
+  coverageThreshold: {
+    global: {
+      statements: 90,
+      branches: 78,
+      functions: 80,
+      lines: 90,
+    },
+  },
 };
