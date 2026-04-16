@@ -6,7 +6,6 @@ on:
     branches: [mainline]
   push:
     branches: [mainline]
-    tags: ['v*']
 
 permissions:
   contents: read
