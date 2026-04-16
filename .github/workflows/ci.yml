@@ -1,0 +1,102 @@
+name: ci
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [mainline]
+  push:
+    branches: [mainline]
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+
+      - name: Run tests
+        run: make local-test
+
+  mocks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+
+      - name: Generate mocks
+        run: make gen-mocks
+
+      - name: Verify no diff
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Generated mocks are out of date. Run 'make gen-mocks' and commit."
+            git diff
+            exit 1
+          fi
+          echo "Generated mocks all match."
+
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [compile-linux, compile-windows, compile-darwin]
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+
+      - name: Package custom resources
+        run: make package-custom-resources
+
+      - name: Build
+        run: make ${{ matrix.target }}
+
+      - name: Cleanup
+        if: always()
+        run: make package-custom-resources-clean
+
+  license:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Run license check
+        run: ./scripts/license.sh .
