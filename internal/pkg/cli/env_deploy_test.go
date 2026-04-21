@@ -529,6 +529,9 @@ func TestDeployEnvOpts_Execute(t *testing.T) {
 	}
 }
 
+// TestDeployEnvOpts_Execute_ImportedVPCIPv6Validator exercises validateIPv6Readiness
+// in isolation (not via Execute) — validateIPv6Toggle already has its own tests,
+// and this keeps the subject-under-test narrow.
 func TestDeployEnvOpts_Execute_ImportedVPCIPv6Validator(t *testing.T) {
 	const (
 		appName = "demo"

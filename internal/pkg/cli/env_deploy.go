@@ -70,7 +70,7 @@ type deployEnvOpts struct {
 	newEnvDeployer      func() (envDeployer, error)
 	newEnvDescriber     func(appName, envName string) (envStackOutputsGetter, error)
 	ec2Client           ec2Client
-	newEC2Client        func() ec2Client
+	newEC2Client        func() (ec2Client, error)
 
 	// Cached variables.
 	targetApp *config.Application
@@ -127,14 +127,14 @@ func newEnvDeployOpts(vars deployEnvVars) (*deployEnvOpts, error) {
 	opts.newEnvDeployer = func() (envDeployer, error) {
 		return newEnvDeployer(opts, ws)
 	}
-	opts.newEC2Client = func() ec2Client {
+	opts.newEC2Client = func() (ec2Client, error) {
 		// Session is loaded lazily — we only need EC2 when a deploy actually
 		// runs against an imported IPv6 VPC.
 		sess, err := sessProvider.Default()
 		if err != nil {
-			return nil
+			return nil, fmt.Errorf("load default session for EC2 client: %w", err)
 		}
-		return ec2.New(sess)
+		return ec2.New(sess), nil
 	}
 	return opts, nil
 }
@@ -325,31 +325,35 @@ func (o *deployEnvOpts) validateIPv6Toggle() error {
 	return nil
 }
 
-// validateIPv6Readiness runs the EC2-backed pre-flight check on an imported
-// VPC when the manifest opts into IPv6. Returns nil for managed VPCs, for
-// imported VPCs with IPv6 off, or when the VPC and every imported subnet
-// has an associated IPv6 CIDR block. Errors surface errImportedVPCMissingIPv6
-// or errImportedSubnetsMissingIPv6 with identifying context.
+// validateIPv6Readiness is a pre-flight check that runs during env deploy
+// when the manifest's imported VPC opts into IPv6. It returns nil without
+// calling EC2 for managed VPCs or when IPv6 is disabled; otherwise it
+// lazily initializes the EC2 client and delegates to
+// validateImportedVPCIPv6Readiness, which surfaces
+// errImportedVPCMissingIPv6 or errImportedSubnetsMissingIPv6 on failure.
 func (o *deployEnvOpts) validateIPv6Readiness() error {
 	if o.mft == nil {
 		return nil
 	}
-	vpc := o.mft.Network.VPC
+	vpc := &o.mft.Network.VPC
 	if vpc.ID == nil || aws.StringValue(vpc.ID) == "" {
 		return nil // managed VPC — no imported readiness to check.
 	}
-	if !(&vpc).IPv6Enabled() {
+	if !vpc.IPv6Enabled() {
 		return nil // imported VPC but IPv6 off — nothing to check.
 	}
 
 	if o.ec2Client == nil {
+		// Tests may construct deployEnvOpts without a factory; fall through
+		// as if no EC2 call is needed.
 		if o.newEC2Client == nil {
-			return nil // test path without wiring; skip.
+			return nil
 		}
-		o.ec2Client = o.newEC2Client()
-		if o.ec2Client == nil {
-			return fmt.Errorf("unable to initialize EC2 client for IPv6 readiness check")
+		client, err := o.newEC2Client()
+		if err != nil {
+			return fmt.Errorf("initialize EC2 client for IPv6 readiness check: %w", err)
 		}
+		o.ec2Client = client
 	}
 
 	var subnetIDs []string
