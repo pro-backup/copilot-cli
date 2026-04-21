@@ -352,6 +352,32 @@ Resources:
       ToPort: 443
       IpProtocol: tcp
       GroupId: !Ref InternalLoadBalancerSecurityGroup
+{{- if .VPCConfig.IPv6Enabled }}
+  InternalLoadBalancerSecurityGroupIngressFromHttpIPv6:
+    Metadata:
+      'aws:copilot:description': 'An IPv6 inbound rule to the internal load balancer security group for port 80 within the VPC'
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: CreateInternalALB
+    Properties:
+      Description: Allow from within the VPC over IPv6 on port 80
+      CidrIpv6: ::/0
+      FromPort: 80
+      ToPort: 80
+      IpProtocol: tcp
+      GroupId: !Ref InternalLoadBalancerSecurityGroup
+  InternalLoadBalancerSecurityGroupIngressFromHttpsIPv6:
+    Metadata:
+      'aws:copilot:description': 'An IPv6 inbound rule to the internal load balancer security group for port 443 within the VPC'
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: ExportInternalHTTPSListener
+    Properties:
+      Description: Allow from within the VPC over IPv6 on port 443
+      CidrIpv6: ::/0
+      FromPort: 443
+      ToPort: 443
+      IpProtocol: tcp
+      GroupId: !Ref InternalLoadBalancerSecurityGroup
+{{- end }}
 {{- end}}
   PublicLoadBalancer:
     Metadata:

@@ -616,3 +616,39 @@ network:
 	require.Contains(t, body, "CidrIp: 1.1.1.1/32")
 	require.Contains(t, body, "CidrIpv6: 2001:db8::/32")
 }
+
+// TestEnvStack_IPv6_InternalALBHasV6Ingress proves the internal ALB SG
+// has v6 ingress when both IPv6 and AllowVPCIngress are on.
+func TestEnvStack_IPv6_InternalALBHasV6Ingress(t *testing.T) {
+	rawMft := `name: test
+type: Environment
+http:
+  private:
+    security_groups:
+      ingress:
+        from_vpc: true
+    certificates:
+      - cert-1
+network:
+  vpc:
+    ipv6:
+      enabled: true
+`
+	var mft manifest.Environment
+	require.NoError(t, yaml.Unmarshal([]byte(rawMft), &mft))
+	envStack, err := stack.NewEnvStackConfig(&stack.EnvConfig{
+		Version:              "1.x",
+		App:                  deploy.AppInformation{AccountPrincipalARN: "arn:aws:iam::000000000:root", Name: "demo"},
+		Name:                 "test",
+		ArtifactBucketARN:    "arn:aws:s3:::mockbucket",
+		ArtifactBucketKeyARN: "arn:aws:kms:us-west-2:000000000:key/1234abcd-12ab-34cd-56ef-1234567890ab",
+		Mft:                  &mft,
+		RawMft:               rawMft,
+	})
+	require.NoError(t, err)
+	body, err := envStack.Template()
+	require.NoError(t, err)
+	require.Contains(t, body, "InternalLoadBalancerSecurityGroupIngressFromHttpIPv6:")
+	require.Contains(t, body, "InternalLoadBalancerSecurityGroupIngressFromHttpsIPv6:")
+	require.Contains(t, body, "Allow from within the VPC over IPv6")
+}
