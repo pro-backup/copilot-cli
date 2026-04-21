@@ -91,6 +91,9 @@ ServiceConnectConfiguration:
 NetworkConfiguration:
   AwsvpcConfiguration:
     AssignPublicIp: {{.Network.AssignPublicIP}}
+    {{- if and .Network.IPv6Enabled (not .Platform.IsWindows) }}
+    AssignIpv6Address: ENABLED
+    {{- end }}
     Subnets:
     {{- if .Network.SubnetIDs}}
       {{- range $id := .Network.SubnetIDs}}
