@@ -124,3 +124,27 @@ func TestWithEnvParsingFuncs_AddHelper(t *testing.T) {
 		})
 	}
 }
+
+func TestIsIPv6CIDR(t *testing.T) {
+	testCases := map[string]struct {
+		in     string
+		wanted bool
+	}{
+		"IPv4 CIDR /32":      {in: "10.0.0.0/32", wanted: false},
+		"IPv4 CIDR /8":       {in: "10.0.0.0/8", wanted: false},
+		"IPv4 default route": {in: "0.0.0.0/0", wanted: false},
+		"IPv6 CIDR /128":     {in: "2001:db8::1/128", wanted: true},
+		"IPv6 CIDR /32":      {in: "2001:db8::/32", wanted: true},
+		"IPv6 default route": {in: "::/0", wanted: true},
+		"IPv4-mapped IPv6":   {in: "::ffff:10.0.0.0/104", wanted: false},
+		"bare IPv4 no mask":  {in: "10.0.0.0", wanted: false},
+		"bare IPv6 no mask":  {in: "2001:db8::", wanted: false},
+		"empty string":       {in: "", wanted: false},
+		"garbage":            {in: "not-a-cidr", wanted: false},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			require.Equal(t, tc.wanted, IsIPv6CIDR(tc.in))
+		})
+	}
+}

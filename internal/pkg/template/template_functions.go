@@ -6,6 +6,7 @@ package template
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"regexp"
 	"strconv"
 	"strings"
@@ -108,6 +109,17 @@ func IncFunc(i int) int { return i + 1 }
 // from the VPC /56).
 func AddFunc(a, b int) int {
 	return a + b
+}
+
+// IsIPv6CIDR reports whether cidr is a valid IPv6 CIDR block (for use as
+// AWS::EC2::SecurityGroupIngress.CidrIpv6). Returns false for v4 CIDRs,
+// v4-mapped v6, bare IPs, or malformed input.
+func IsIPv6CIDR(cidr string) bool {
+	ip, _, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return false
+	}
+	return ip.To4() == nil
 }
 
 // FmtSliceFunc renders a string representation of a go string slice, surrounded by brackets
