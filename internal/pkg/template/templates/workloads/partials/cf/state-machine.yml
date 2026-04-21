@@ -33,6 +33,9 @@ StateMachine:
             - Fn::ImportValue: !Sub '${AppName}-${EnvName}-{{.Network.SubnetsType}}'
       {{- end}}
       AssignPublicIp: {{.Network.AssignPublicIP}}
+      {{- if and .Network.IPv6Enabled (not .Platform.IsWindows) }}
+      AssignIpv6Address: ENABLED
+      {{- end }}
       SecurityGroups:
         Fn::Join:
           - '","'

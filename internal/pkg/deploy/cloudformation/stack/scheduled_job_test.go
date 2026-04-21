@@ -633,3 +633,29 @@ func TestScheduledJob_envIPv6EnabledPropagatesToNetworkOpts(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, got.envIPv6Enabled, "ScheduledJob.envIPv6Enabled must be set from envManifest.Network.VPC.IPv6Enabled()")
 }
+
+func TestScheduledJob_Template_IPv6Enabled_RendersAssignIpv6Address(t *testing.T) {
+	conf := ScheduledJobConfig{
+		App:                &config.Application{Name: "mockApp"},
+		EnvManifest:        mustEnvManifestWithIPv6(t, true),
+		Env:                "test",
+		ArtifactBucketName: "mockBucket",
+		Manifest: manifest.NewScheduledJob(&manifest.ScheduledJobProps{
+			WorkloadProps: &manifest.WorkloadProps{
+				Name:       "mailer",
+				Dockerfile: "mailer/Dockerfile",
+			},
+			Schedule: "@daily",
+		}),
+		RuntimeConfig: RuntimeConfig{
+			Version:   "v1.29.0",
+			Region:    "us-west-2",
+			AccountID: "123456789012",
+		},
+	}
+	job, err := NewScheduledJob(conf)
+	require.NoError(t, err)
+	tpl, err := job.Template()
+	require.NoError(t, err)
+	require.Contains(t, tpl, "AssignIpv6Address: ENABLED")
+}
