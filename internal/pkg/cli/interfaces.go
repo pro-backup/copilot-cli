@@ -590,6 +590,8 @@ type credsSelector interface {
 type ec2Client interface {
 	HasDNSSupport(vpcID string) (bool, error)
 	ListAZs() ([]ec2.AZ, error)
+	HasVPCIPv6(vpcID string) (bool, error)
+	SubnetsByIDs(ids []string) ([]ec2.Subnet, error)
 }
 
 type serviceResumer interface {
