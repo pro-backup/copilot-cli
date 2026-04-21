@@ -28,5 +28,18 @@ var _ = Describe("Env IPv6 Dual-Stack", Ordered, func() {
 			//   - Subnet IPv6 blocks are pairwise disjoint.
 			Skip("TODO: fill in once e2e/internal/client has EC2 describe helpers")
 		})
+		It("creates private route tables even with no NAT workloads", func() {
+			_ = appName
+			_ = cli
+			_ = Expect
+			// Setup: deploy an env with IPv6 on and no ALB/NAT workload.
+			// Expected:
+			//   - CreatePrivateRouteTables condition evaluates true.
+			//   - Each private subnet is associated with a private route table.
+			//   - Each private route table has route ::/0 → EgressOnlyIGW.
+			//   - No NAT gateway exists.
+			//   - No 0.0.0.0/0 default route on any private route table.
+			Skip("TODO: fill in once e2e/internal/client has EC2 describe helpers")
+		})
 	})
 })
