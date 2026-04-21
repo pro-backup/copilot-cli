@@ -189,6 +189,32 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 'copilot-${AppName}-${EnvironmentName}-lb-https'
+{{- if .VPCConfig.IPv6Enabled }}
+  PublicHTTPLoadBalancerSecurityGroupIngressIPv6:
+    Metadata:
+      'aws:copilot:description': 'An IPv6 inbound rule to the public HTTP load balancer security group for port 80'
+    Condition: CreateALB
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref PublicHTTPLoadBalancerSecurityGroup
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      CidrIpv6: ::/0
+      Description: Allow from anyone over IPv6 on port 80
+  PublicHTTPSLoadBalancerSecurityGroupIngressIPv6:
+    Metadata:
+      'aws:copilot:description': 'An IPv6 inbound rule to the public HTTPS load balancer security group for port 443'
+    Condition: ExportHTTPSListener
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref PublicHTTPSLoadBalancerSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIpv6: ::/0
+      Description: Allow from anyone over IPv6 on port 443
+{{- end }}
   InternalLoadBalancerSecurityGroup:
     Metadata:
       'aws:copilot:description': 'A security group for your internal load balancer allowing HTTP traffic from within the VPC'
