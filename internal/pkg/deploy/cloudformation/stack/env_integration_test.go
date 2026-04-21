@@ -290,6 +290,41 @@ network:
 			}(),
 			wantedFileName: "template-with-ipv6-enabled.yml",
 		},
+		"ipv6 with custom ingress and internal alb vpc ingress": {
+			input: func() *stack.EnvConfig {
+				rawMft := `name: test
+type: Environment
+http:
+  public:
+    certificates:
+      - cert-1
+  private:
+    security_groups:
+      ingress:
+        from_vpc: true
+    certificates:
+      - cert-2
+network:
+  vpc:
+    ipv6:
+      enabled: true
+`
+				var mft manifest.Environment
+				err := yaml.Unmarshal([]byte(rawMft), &mft)
+				require.NoError(t, err)
+				return &stack.EnvConfig{
+					Version:              "1.x",
+					App:                  deploy.AppInformation{AccountPrincipalARN: "arn:aws:iam::000000000:root", Name: "demo"},
+					Name:                 "test",
+					PublicALBSourceIPs:   []string{"1.1.1.1/32", "2001:db8::/32"},
+					ArtifactBucketARN:    "arn:aws:s3:::mockbucket",
+					ArtifactBucketKeyARN: "arn:aws:kms:us-west-2:000000000:key/1234abcd-12ab-34cd-56ef-1234567890ab",
+					Mft:                  &mft,
+					RawMft:               rawMft,
+				}
+			}(),
+			wantedFileName: "template-with-ipv6-and-custom-ingress.yml",
+		},
 	}
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
@@ -518,4 +553,137 @@ network:
 	// Proof the flag reached the template: the EgressOnlyInternetGateway
 	// resource only appears when IPv6Enabled is true.
 	require.Contains(t, body, "EgressOnlyInternetGateway:")
+}
+
+// TestEnvStack_IPv6ALBsAreDualstack proves the PublicLoadBalancer and
+// InternalLoadBalancer render with IpAddressType: dualstack when the
+// env has network.vpc.ipv6.enabled: true. Regression guard: removing
+// either guard from cf.yml drops the count below 2 and fails the test.
+func TestEnvStack_IPv6ALBsAreDualstack(t *testing.T) {
+	rawMft := `name: test
+type: Environment
+network:
+  vpc:
+    ipv6:
+      enabled: true
+`
+	var mft manifest.Environment
+	require.NoError(t, yaml.Unmarshal([]byte(rawMft), &mft))
+	envCfg := &stack.EnvConfig{
+		Version: "1.x",
+		App: deploy.AppInformation{
+			AccountPrincipalARN: "arn:aws:iam::000000000:root",
+			Name:                "demo",
+		},
+		Name:                 "test",
+		ArtifactBucketARN:    "arn:aws:s3:::mockbucket",
+		ArtifactBucketKeyARN: "arn:aws:kms:us-west-2:000000000:key/1234abcd-12ab-34cd-56ef-1234567890ab",
+		Mft:                  &mft,
+		RawMft:               rawMft,
+	}
+	envStack, err := stack.NewEnvStackConfig(envCfg)
+	require.NoError(t, err)
+	body, err := envStack.Template()
+	require.NoError(t, err)
+	// At least twice: once on PublicLoadBalancer, once on InternalLoadBalancer.
+	require.GreaterOrEqual(t, strings.Count(body, "IpAddressType: dualstack"), 2,
+		"expected IpAddressType: dualstack on both PublicLoadBalancer and InternalLoadBalancer")
+}
+
+// TestEnvStack_IPv6_PublicALBHasV6SGIngress proves standalone
+// AWS::EC2::SecurityGroupIngress resources are emitted when IPv6 is on.
+func TestEnvStack_IPv6_PublicALBHasV6SGIngress(t *testing.T) {
+	rawMft := `name: test
+type: Environment
+network:
+  vpc:
+    ipv6:
+      enabled: true
+`
+	var mft manifest.Environment
+	require.NoError(t, yaml.Unmarshal([]byte(rawMft), &mft))
+	envStack, err := stack.NewEnvStackConfig(&stack.EnvConfig{
+		Version:              "1.x",
+		App:                  deploy.AppInformation{AccountPrincipalARN: "arn:aws:iam::000000000:root", Name: "demo"},
+		Name:                 "test",
+		ArtifactBucketARN:    "arn:aws:s3:::mockbucket",
+		ArtifactBucketKeyARN: "arn:aws:kms:us-west-2:000000000:key/1234abcd-12ab-34cd-56ef-1234567890ab",
+		Mft:                  &mft,
+		RawMft:               rawMft,
+	})
+	require.NoError(t, err)
+	body, err := envStack.Template()
+	require.NoError(t, err)
+	require.Contains(t, body, "PublicHTTPLoadBalancerSecurityGroupIngressIPv6:")
+	require.Contains(t, body, "PublicHTTPSLoadBalancerSecurityGroupIngressIPv6:")
+	require.Contains(t, body, "CidrIpv6: ::/0")
+}
+
+// TestEnvStack_IPv6_CustomIngressSplitsByFamily proves the custom-ingress
+// block routes v4 CIDRs to CidrIp and v6 CIDRs to CidrIpv6.
+func TestEnvStack_IPv6_CustomIngressSplitsByFamily(t *testing.T) {
+	rawMft := `name: test
+type: Environment
+http:
+  public:
+    certificates:
+      - cert-1
+network:
+  vpc:
+    ipv6:
+      enabled: true
+`
+	var mft manifest.Environment
+	require.NoError(t, yaml.Unmarshal([]byte(rawMft), &mft))
+	envStack, err := stack.NewEnvStackConfig(&stack.EnvConfig{
+		Version:              "1.x",
+		App:                  deploy.AppInformation{AccountPrincipalARN: "arn:aws:iam::000000000:root", Name: "demo"},
+		Name:                 "test",
+		PublicALBSourceIPs:   []string{"1.1.1.1/32", "2001:db8::/32"},
+		ArtifactBucketARN:    "arn:aws:s3:::mockbucket",
+		ArtifactBucketKeyARN: "arn:aws:kms:us-west-2:000000000:key/1234abcd-12ab-34cd-56ef-1234567890ab",
+		Mft:                  &mft,
+		RawMft:               rawMft,
+	})
+	require.NoError(t, err)
+	body, err := envStack.Template()
+	require.NoError(t, err)
+	require.Contains(t, body, "CidrIp: 1.1.1.1/32")
+	require.Contains(t, body, "CidrIpv6: 2001:db8::/32")
+}
+
+// TestEnvStack_IPv6_InternalALBHasV6Ingress proves the internal ALB SG
+// has v6 ingress when both IPv6 and AllowVPCIngress are on.
+func TestEnvStack_IPv6_InternalALBHasV6Ingress(t *testing.T) {
+	rawMft := `name: test
+type: Environment
+http:
+  private:
+    security_groups:
+      ingress:
+        from_vpc: true
+    certificates:
+      - cert-1
+network:
+  vpc:
+    ipv6:
+      enabled: true
+`
+	var mft manifest.Environment
+	require.NoError(t, yaml.Unmarshal([]byte(rawMft), &mft))
+	envStack, err := stack.NewEnvStackConfig(&stack.EnvConfig{
+		Version:              "1.x",
+		App:                  deploy.AppInformation{AccountPrincipalARN: "arn:aws:iam::000000000:root", Name: "demo"},
+		Name:                 "test",
+		ArtifactBucketARN:    "arn:aws:s3:::mockbucket",
+		ArtifactBucketKeyARN: "arn:aws:kms:us-west-2:000000000:key/1234abcd-12ab-34cd-56ef-1234567890ab",
+		Mft:                  &mft,
+		RawMft:               rawMft,
+	})
+	require.NoError(t, err)
+	body, err := envStack.Template()
+	require.NoError(t, err)
+	require.Contains(t, body, "InternalLoadBalancerSecurityGroupIngressFromHttpIPv6:")
+	require.Contains(t, body, "InternalLoadBalancerSecurityGroupIngressFromHttpsIPv6:")
+	require.Contains(t, body, "Allow from within the VPC over IPv6")
 }

@@ -5,6 +5,16 @@ Metadata:
   Manifest: |
     name: test
     type: Environment
+    http:
+      public:
+        certificates:
+          - cert-1
+      private:
+        security_groups:
+          ingress:
+            from_vpc: true
+        certificates:
+          - cert-2
     network:
       vpc:
         ipv6:
@@ -125,6 +135,14 @@ Resources:
         PolicyDocument:
           Version: '2012-10-17'
           Statement:
+          - Sid: ImportedCertificates
+            Effect: Allow
+            Action: [
+              acm:DescribeCertificate
+            ]
+            Resource:
+            - "cert-1"
+            - "cert-2"
           - Sid: CloudwatchLogs
             Effect: Allow
             Action: [
@@ -662,8 +680,13 @@ Resources:
     Properties:
       GroupDescription: HTTP access to the public facing load balancer
       SecurityGroupIngress:
-        - CidrIp: 0.0.0.0/0
-          Description: Allow from anyone on port 80
+        - CidrIp: 1.1.1.1/32
+          Description: Allow ingress from source IP 1.1.1.1/32 on port 80
+          FromPort: 80
+          IpProtocol: tcp
+          ToPort: 80
+        - CidrIpv6: 2001:db8::/32
+          Description: Allow ingress from source IPv6 2001:db8::/32 on port 80
           FromPort: 80
           IpProtocol: tcp
           ToPort: 80
@@ -679,8 +702,13 @@ Resources:
     Properties:
       GroupDescription: HTTPS access to the public facing load balancer
       SecurityGroupIngress:
-        - CidrIp: 0.0.0.0/0
-          Description: Allow from anyone on port 443
+        - CidrIp: 1.1.1.1/32
+          Description: Allow ingress from source IP 1.1.1.1/32 on port 443
+          FromPort: 443
+          IpProtocol: tcp
+          ToPort: 443
+        - CidrIpv6: 2001:db8::/32
+          Description: Allow ingress from source IPv6 2001:db8::/32 on port 443
           FromPort: 443
           IpProtocol: tcp
           ToPort: 443
@@ -780,6 +808,54 @@ Resources:
       GroupId: !Ref InternalLoadBalancerSecurityGroup
       IpProtocol: -1
       SourceSecurityGroupId: !Ref EnvironmentSecurityGroup
+  InternalLoadBalancerSecurityGroupIngressFromHttp:
+    Metadata:
+      'aws:copilot:description': 'An inbound rule to the internal load balancer security group for port 80 within the VPC'
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: CreateInternalALB
+    Properties:
+      Description: Allow from within the VPC on port 80
+      CidrIp: 0.0.0.0/0
+      FromPort: 80
+      ToPort: 80
+      IpProtocol: tcp
+      GroupId: !Ref InternalLoadBalancerSecurityGroup
+  InternalLoadBalancerSecurityGroupIngressFromHttps:
+    Metadata:
+      'aws:copilot:description': 'An inbound rule to the internal load balancer security group for port 443 within the VPC'
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: ExportInternalHTTPSListener
+    Properties:
+      Description: Allow from within the VPC on port 443
+      CidrIp: 0.0.0.0/0
+      FromPort: 443
+      ToPort: 443
+      IpProtocol: tcp
+      GroupId: !Ref InternalLoadBalancerSecurityGroup
+  InternalLoadBalancerSecurityGroupIngressFromHttpIPv6:
+    Metadata:
+      'aws:copilot:description': 'An IPv6 inbound rule to the internal load balancer security group for port 80 within the VPC'
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: CreateInternalALB
+    Properties:
+      Description: Allow from within the VPC over IPv6 on port 80
+      CidrIpv6: ::/0
+      FromPort: 80
+      ToPort: 80
+      IpProtocol: tcp
+      GroupId: !Ref InternalLoadBalancerSecurityGroup
+  InternalLoadBalancerSecurityGroupIngressFromHttpsIPv6:
+    Metadata:
+      'aws:copilot:description': 'An IPv6 inbound rule to the internal load balancer security group for port 443 within the VPC'
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: ExportInternalHTTPSListener
+    Properties:
+      Description: Allow from within the VPC over IPv6 on port 443
+      CidrIpv6: ::/0
+      FromPort: 443
+      ToPort: 443
+      IpProtocol: tcp
+      GroupId: !Ref InternalLoadBalancerSecurityGroup
   PublicLoadBalancer:
     Metadata:
       'aws:copilot:description': 'An Application Load Balancer to distribute public traffic to your services'
@@ -832,7 +908,7 @@ Resources:
     Condition: ExportHTTPSListener
     Properties:
       Certificates:
-        - CertificateArn: !Ref HTTPSCert
+        - CertificateArn: cert-1
       DefaultActions:
         - TargetGroupArn: !Ref DefaultHTTPTargetGroup
           Type: forward
@@ -885,22 +961,14 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Condition: ExportInternalHTTPSListener
     Properties:
+      Certificates:
+        - CertificateArn: cert-2
       DefaultActions:
         - TargetGroupArn: !Ref DefaultInternalHTTPTargetGroup
           Type: forward
       LoadBalancerArn: !Ref InternalLoadBalancer
       Port: 443
       Protocol: HTTPS
-  InternalWorkloadsHostedZone:
-    Metadata:
-      'aws:copilot:description': 'A hosted zone named test.demo.internal for backends behind a private load balancer'
-    Condition: CreateInternalALB
-    Type: AWS::Route53::HostedZone
-    Properties:
-      Name: !Sub ${EnvironmentName}.${AppName}.internal
-      VPCs:
-        - VPCId: !Ref VPC
-          VPCRegion: !Ref AWS::Region
   FileSystem:
     Condition: CreateEFS
     Type: AWS::EFS::FileSystem
@@ -973,133 +1041,6 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
       SecurityGroups:
         - !Ref EFSSecurityGroup
-  
-  CustomResourceRole:
-    Metadata:
-      'aws:copilot:description': 'An IAM role to manage certificates and Route53 hosted zones'
-    Type: AWS::IAM::Role
-    Condition: DelegateDNS
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          -
-            Effect: Allow
-            Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action:
-              - sts:AssumeRole
-      Path: /
-      Policies:
-        - PolicyName: "DNSandACMAccess"
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "acm:ListCertificates"
-                  - "acm:RequestCertificate"
-                  - "acm:DescribeCertificate"
-                  - "acm:GetCertificate"
-                  - "acm:DeleteCertificate"
-                  - "acm:AddTagsToCertificate"
-                  - "sts:AssumeRole"
-                  - "logs:*"
-                  - "route53:ChangeResourceRecordSets"
-                  - "route53:Get*"
-                  - "route53:Describe*"
-                  - "route53:ListResourceRecordSets"
-                  - "route53:ListHostedZonesByName"
-                Resource:
-                  - "*"
-  EnvironmentHostedZone:
-    Metadata:
-      'aws:copilot:description': "A Route 53 Hosted Zone for the environment's subdomain"
-    Type: "AWS::Route53::HostedZone"
-    Condition: DelegateDNS
-    Properties:
-      HostedZoneConfig:
-        Comment: !Sub "HostedZone for environment ${EnvironmentName} - ${EnvironmentName}.${AppName}.${AppDNSName}"
-      Name: !Sub ${EnvironmentName}.${AppName}.${AppDNSName}
-  CertificateValidationFunction:
-    Type: AWS::Lambda::Function
-    Condition: DelegateDNS
-    Properties:
-      Handler: "index.certificateRequestHandler"
-      Timeout: 900
-      MemorySize: 512
-      Role: !GetAtt 'CustomResourceRole.Arn'
-      Runtime: nodejs24.x
-  
-  CustomDomainFunction:
-    Condition: ManagedAliases
-    Type: AWS::Lambda::Function
-    Properties:
-      Handler: "index.handler"
-      Timeout: 600
-      MemorySize: 512
-      Role: !GetAtt 'CustomResourceRole.Arn'
-      Runtime: nodejs24.x 
-  
-  DNSDelegationFunction:
-    Type: AWS::Lambda::Function
-    Condition: DelegateDNS
-    Properties:
-      Handler: "index.domainDelegationHandler"
-      Timeout: 600
-      MemorySize: 512
-      Role: !GetAtt 'CustomResourceRole.Arn'
-      Runtime: nodejs24.x
-  
-  DelegateDNSAction:
-    Metadata:
-      'aws:copilot:description': 'Delegate DNS for environment subdomain'
-    Condition: DelegateDNS
-    Type: Custom::DNSDelegationFunction
-    DependsOn:
-    - DNSDelegationFunction
-    - EnvironmentHostedZone
-    Properties:
-      ServiceToken: !GetAtt DNSDelegationFunction.Arn
-      DomainName: !Sub ${AppName}.${AppDNSName}
-      SubdomainName: !Sub ${EnvironmentName}.${AppName}.${AppDNSName}
-      NameServers: !GetAtt EnvironmentHostedZone.NameServers
-      RootDNSRole: !Ref AppDNSDelegationRole
-  
-  HTTPSCert:
-    Metadata:
-      'aws:copilot:description': 'Request and validate an ACM certificate for your domain'
-    Condition: DelegateDNS
-    Type: Custom::CertificateValidationFunction
-    DependsOn:
-    - CertificateValidationFunction
-    - EnvironmentHostedZone
-    - DelegateDNSAction
-    Properties:
-      ServiceToken: !GetAtt CertificateValidationFunction.Arn
-      AppName: !Ref AppName
-      EnvName: !Ref EnvironmentName
-      DomainName: !Ref AppDNSName
-      Aliases: !Ref Aliases
-      EnvHostedZoneId: !Ref EnvironmentHostedZone
-      Region: !Ref AWS::Region
-      RootDNSRole: !Ref AppDNSDelegationRole
-  
-  CustomDomainAction:
-    Metadata:
-      'aws:copilot:description': 'Add an A-record to the hosted zone for the domain alias'
-    Condition: ManagedAliases
-    Type: Custom::CustomDomainFunction
-    Properties:
-      ServiceToken: !GetAtt CustomDomainFunction.Arn
-      AppName: !Ref AppName
-      EnvName: !Ref EnvironmentName
-      Aliases: !Ref Aliases
-      AppDNSRole: !Ref AppDNSDelegationRole
-      DomainName: !Ref AppDNSName
-      PublicAccessDNS: !GetAtt PublicLoadBalancer.DNSName
-      PublicAccessHostedZone: !GetAtt PublicLoadBalancer.CanonicalHostedZoneID
   AppRunnerVpcEndpointSecurityGroup:
     Metadata:
       'aws:copilot:description': 'A security group for App Runner private services'
@@ -1249,16 +1190,6 @@ Outputs:
     Value: !GetAtt InternalLoadBalancer.CanonicalHostedZoneID
     Export:
       Name: !Sub ${AWS::StackName}-InternalLoadBalancerCanonicalHostedZoneID
-  InternalWorkloadsHostedZone:
-    Condition: CreateInternalALB
-    Value: !Ref InternalWorkloadsHostedZone
-    Export:
-      Name: !Sub ${AWS::StackName}-InternalWorkloadsHostedZoneID
-  InternalWorkloadsHostedZoneName:
-    Condition: CreateInternalALB
-    Value: !Sub ${EnvironmentName}.${AppName}.internal
-    Export:
-      Name: !Sub ${AWS::StackName}-InternalWorkloadsHostedZoneName
   InternalHTTPListenerArn:
     Condition: CreateInternalALB
     Value: !Ref InternalHTTPListener
@@ -1288,18 +1219,6 @@ Outputs:
     Description: The role to be assumed by the Cloudformation service when it deploys application infrastructure.
     Export:
       Name: !Sub ${AWS::StackName}-CFNExecutionRoleARN
-  EnvironmentHostedZone:
-    Condition: DelegateDNS
-    Value: !Ref EnvironmentHostedZone
-    Description: The HostedZone for this environment's private DNS.
-    Export:
-      Name: !Sub ${AWS::StackName}-HostedZone
-  EnvironmentSubdomain:
-    Condition: DelegateDNS
-    Value: !Sub ${EnvironmentName}.${AppName}.${AppDNSName}
-    Description: The domain name of this environment.
-    Export:
-      Name: !Sub ${AWS::StackName}-SubDomain
   EnabledFeatures:
     Value: !Sub '${ALBWorkloads},${InternalALBWorkloads},${EFSWorkloads},${NATWorkloads},${Aliases},${AppRunnerPrivateWorkloads}'
     Description: Required output to force the stack to update if mutating feature params, like ALBWorkloads, does not change the template.

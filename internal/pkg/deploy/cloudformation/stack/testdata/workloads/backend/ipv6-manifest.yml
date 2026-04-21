@@ -1,0 +1,14 @@
+name: ipv6
+type: Backend Service
+
+http:
+  path: "/"
+
+image:
+  build: Dockerfile
+  port: 8080
+
+cpu: 512
+memory: 1024
+count: 1
+exec: true
