@@ -4,7 +4,10 @@
 package template
 
 import (
+	"bytes"
+	"fmt"
 	"testing"
+	"text/template"
 
 	"github.com/spf13/afero"
 
@@ -96,6 +99,28 @@ func TestTruncate(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			require.Equal(t, tc.expected, truncate(tc.s, tc.maxLen))
+		})
+	}
+}
+
+func TestWithEnvParsingFuncs_AddHelper(t *testing.T) {
+	testCases := map[string]struct {
+		a, b int
+		want string
+	}{
+		"basic positive": {3, 4, "7"},
+		"zero operand":   {0, 5, "5"},
+		"negative":       {3, -2, "1"},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			tpl := template.New("t")
+			tpl = withEnvParsingFuncs()(tpl)
+			parsed, err := tpl.Parse(fmt.Sprintf(`{{add %d %d}}`, tc.a, tc.b))
+			require.NoError(t, err)
+			var buf bytes.Buffer
+			require.NoError(t, parsed.Execute(&buf, nil))
+			require.Equal(t, tc.want, buf.String())
 		})
 	}
 }

@@ -33,6 +33,11 @@ import (
 
 const continueDeploymentPrompt = "Continue with the deployment?"
 
+var errIPv6ToggleOnExistingEnv = errors.New(
+	"IPv6 cannot be toggled on an existing environment. " +
+		"Create a new environment with IPv6 enabled, or follow the upgrade path once it lands.",
+)
+
 type deployEnvVars struct {
 	appName           string
 	name              string
@@ -62,10 +67,14 @@ type deployEnvOpts struct {
 	newInterpolator     func(app, env string) interpolator
 	newEnvVersionGetter func(appName, envName string) (versionGetter, error)
 	newEnvDeployer      func() (envDeployer, error)
+	newEnvDescriber     func(appName, envName string) (envStackOutputsGetter, error)
 
 	// Cached variables.
 	targetApp *config.Application
 	targetEnv *config.Environment
+
+	// Parsed manifest; set during Execute.
+	mft *manifest.Environment
 
 	// Overridden in tests.
 	templateVersion string
@@ -91,6 +100,13 @@ func newEnvDeployOpts(vars deployEnvVars) (*deployEnvOpts, error) {
 		sessionProvider: sessProvider,
 		sel:             selector.NewLocalEnvironmentSelector(prompter, store, ws),
 		newEnvVersionGetter: func(appName, envName string) (versionGetter, error) {
+			return describe.NewEnvDescriber(describe.NewEnvDescriberConfig{
+				App:         appName,
+				Env:         envName,
+				ConfigStore: store,
+			})
+		},
+		newEnvDescriber: func(appName, envName string) (envStackOutputsGetter, error) {
 			return describe.NewEnvDescriber(describe.NewEnvDescriberConfig{
 				App:         appName,
 				Env:         envName,
@@ -185,6 +201,10 @@ func (o *deployEnvOpts) Execute() error {
 	if err != nil {
 		return err
 	}
+	o.mft = mft
+	if err := o.validateIPv6Toggle(); err != nil {
+		return err
+	}
 	caller, err := o.identity.Get()
 	if err != nil {
 		return fmt.Errorf("get identity: %w", err)
@@ -261,6 +281,33 @@ After fixing the deployment, you can:
 		return &errNoInfrastructureChanges{parentErr: err}
 	}
 	return fmt.Errorf("deploy environment %s: %w", o.name, err)
+}
+
+// validateIPv6Toggle returns errIPv6ToggleOnExistingEnv when the manifest
+// requests a different IPv6 enablement state than the deployed env stack's
+// IPv6Enabled output. Stacks deployed before IPv6 support landed have no
+// such output; they are treated as IPv6Enabled=false.
+func (o *deployEnvOpts) validateIPv6Toggle() error {
+	manifestWantsIPv6 := o.mft != nil && o.mft.Network.VPC.IPv6Enabled()
+
+	if o.newEnvDescriber == nil {
+		return nil
+	}
+	describer, err := o.newEnvDescriber(o.appName, o.name)
+	if err != nil {
+		// Existing env stack not found (or factory failed) — nothing to validate.
+		return nil
+	}
+	outputs, err := describer.Outputs()
+	if err != nil {
+		return fmt.Errorf("describe existing env stack outputs: %w", err)
+	}
+	stackHasIPv6 := outputs["IPv6Enabled"] == "true"
+
+	if manifestWantsIPv6 != stackHasIPv6 {
+		return errIPv6ToggleOnExistingEnv
+	}
+	return nil
 }
 
 func environmentManifest(envName string, reader wsEnvironmentReader, transformer interpolator) (*manifest.Environment, string, error) {

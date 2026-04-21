@@ -1,0 +1,1336 @@
+Conditions:
+    CreateALB:
+        - - ALBWorkloads
+          - ""
+    CreateAppRunnerVPCEndpoint:
+        - - AppRunnerPrivateWorkloads
+          - ""
+    CreateEFS:
+        - - EFSWorkloads
+          - ""
+    CreateInternalALB:
+        - - InternalALBWorkloads
+          - ""
+    CreateNATGateways:
+        - - NATWorkloads
+          - ""
+    CreatePrivateRouteTables:
+        - CreateNATGateways
+        - - "true"
+          - "true"
+    DelegateDNS:
+        - - AppDNSName
+          - ""
+    ExportHTTPSListener:
+        - CreateALB
+        - - CreateHTTPSListener
+          - true
+    ExportInternalHTTPSListener:
+        - CreateInternalALB
+        - - CreateInternalHTTPSListener
+          - true
+    ManagedAliases:
+        - DelegateDNS
+        - - - Aliases
+            - ""
+        - CreateALB
+Description: CloudFormation environment template for infrastructure shared among Copilot workloads.
+Metadata:
+    Manifest: |
+        name: test
+        type: Environment
+        network:
+          vpc:
+            ipv6:
+              enabled: true
+Outputs:
+    AppRunnerVpcEndpointId:
+        Condition: CreateAppRunnerVPCEndpoint
+        Description: VPC Endpoint to App Runner for private services
+        Export:
+            Name: ${AWS::StackName}-AppRunnerVpcEndpointId
+        Value: AppRunnerVpcEndpoint
+    CFNExecutionRoleARN:
+        Description: The role to be assumed by the Cloudformation service when it deploys application infrastructure.
+        Export:
+            Name: ${AWS::StackName}-CFNExecutionRoleARN
+        Value: CloudformationExecutionRole.Arn
+    ClusterId:
+        Export:
+            Name: ${AWS::StackName}-ClusterId
+        Value: Cluster
+    DefaultHTTPTargetGroupArn:
+        Condition: CreateALB
+        Export:
+            Name: ${AWS::StackName}-DefaultHTTPTargetGroup
+        Value: DefaultHTTPTargetGroup
+    EnabledFeatures:
+        Description: Required output to force the stack to update if mutating feature params, like ALBWorkloads, does not change the template.
+        Value: ${ALBWorkloads},${InternalALBWorkloads},${EFSWorkloads},${NATWorkloads},${Aliases},${AppRunnerPrivateWorkloads}
+    EnvironmentHostedZone:
+        Condition: DelegateDNS
+        Description: The HostedZone for this environment's private DNS.
+        Export:
+            Name: ${AWS::StackName}-HostedZone
+        Value: EnvironmentHostedZone
+    EnvironmentManagerRoleARN:
+        Description: The role to be assumed by the ecs-cli to manage environments.
+        Export:
+            Name: ${AWS::StackName}-EnvironmentManagerRoleARN
+        Value: EnvironmentManagerRole.Arn
+    EnvironmentSecurityGroup:
+        Export:
+            Name: ${AWS::StackName}-EnvironmentSecurityGroup
+        Value: EnvironmentSecurityGroup
+    EnvironmentSubdomain:
+        Condition: DelegateDNS
+        Description: The domain name of this environment.
+        Export:
+            Name: ${AWS::StackName}-SubDomain
+        Value: ${EnvironmentName}.${AppName}.${AppDNSName}
+    HTTPListenerArn:
+        Condition: CreateALB
+        Export:
+            Name: ${AWS::StackName}-HTTPListenerArn
+        Value: HTTPListener
+    HTTPSListenerArn:
+        Condition: ExportHTTPSListener
+        Export:
+            Name: ${AWS::StackName}-HTTPSListenerArn
+        Value: HTTPSListener
+    IPv6Enabled:
+        Description: Whether the environment VPC has IPv6 dual-stack enabled.
+        Export:
+            Name: ${AppName}-${EnvironmentName}-IPv6Enabled
+        Value: "true"
+    InternalHTTPListenerArn:
+        Condition: CreateInternalALB
+        Export:
+            Name: ${AWS::StackName}-InternalHTTPListenerArn
+        Value: InternalHTTPListener
+    InternalHTTPSListenerArn:
+        Condition: ExportInternalHTTPSListener
+        Export:
+            Name: ${AWS::StackName}-InternalHTTPSListenerArn
+        Value: InternalHTTPSListener
+    InternalLoadBalancerDNSName:
+        Condition: CreateInternalALB
+        Export:
+            Name: ${AWS::StackName}-InternalLoadBalancerDNS
+        Value: InternalLoadBalancer.DNSName
+    InternalLoadBalancerFullName:
+        Condition: CreateInternalALB
+        Export:
+            Name: ${AWS::StackName}-InternalLoadBalancerFullName
+        Value: InternalLoadBalancer.LoadBalancerFullName
+    InternalLoadBalancerHostedZone:
+        Condition: CreateInternalALB
+        Export:
+            Name: ${AWS::StackName}-InternalLoadBalancerCanonicalHostedZoneID
+        Value: InternalLoadBalancer.CanonicalHostedZoneID
+    InternalLoadBalancerSecurityGroup:
+        Condition: CreateInternalALB
+        Export:
+            Name: ${AWS::StackName}-InternalLoadBalancerSecurityGroup
+        Value: InternalLoadBalancerSecurityGroup
+    InternalWorkloadsHostedZone:
+        Condition: CreateInternalALB
+        Export:
+            Name: ${AWS::StackName}-InternalWorkloadsHostedZoneID
+        Value: InternalWorkloadsHostedZone
+    InternalWorkloadsHostedZoneName:
+        Condition: CreateInternalALB
+        Export:
+            Name: ${AWS::StackName}-InternalWorkloadsHostedZoneName
+        Value: ${EnvironmentName}.${AppName}.internal
+    InternetGatewayID:
+        Export:
+            Name: ${AWS::StackName}-InternetGatewayID
+        Value: InternetGateway
+    LastForceDeployID:
+        Description: Optionally force the template to update when no immediate resource change is present.
+        Value: ""
+    ManagedFileSystemID:
+        Condition: CreateEFS
+        Description: The ID of the Copilot-managed EFS filesystem.
+        Export:
+            Name: ${AWS::StackName}-FilesystemID
+        Value: FileSystem
+    PrivateRouteTableIDs:
+        Condition: CreateNATGateways
+        Export:
+            Name: ${AWS::StackName}-PrivateRouteTableIDs
+        Value:
+            - ','
+            - - PrivateRouteTable1
+              - PrivateRouteTable2
+    PrivateSubnets:
+        Export:
+            Name: ${AWS::StackName}-PrivateSubnets
+        Value:
+            - ','
+            - - PrivateSubnet1
+              - PrivateSubnet2
+    PrivateSubnetsIpv6CidrBlocks:
+        Description: Comma-delimited list of IPv6 CIDR blocks for the private subnets.
+        Export:
+            Name: ${AppName}-${EnvironmentName}-PrivateSubnetsIpv6CidrBlocks
+        Value:
+            - ','
+            - - - 0
+                - PrivateSubnet1.Ipv6CidrBlocks
+              - - 0
+                - PrivateSubnet2.Ipv6CidrBlocks
+    PublicALBAccessible:
+        Condition: CreateALB
+        Value: true
+    PublicLoadBalancerDNSName:
+        Condition: CreateALB
+        Export:
+            Name: ${AWS::StackName}-PublicLoadBalancerDNS
+        Value: PublicLoadBalancer.DNSName
+    PublicLoadBalancerFullName:
+        Condition: CreateALB
+        Export:
+            Name: ${AWS::StackName}-PublicLoadBalancerFullName
+        Value: PublicLoadBalancer.LoadBalancerFullName
+    PublicLoadBalancerHostedZone:
+        Condition: CreateALB
+        Export:
+            Name: ${AWS::StackName}-CanonicalHostedZoneID
+        Value: PublicLoadBalancer.CanonicalHostedZoneID
+    PublicRouteTableID:
+        Export:
+            Name: ${AWS::StackName}-PublicRouteTableID
+        Value: PublicRouteTable
+    PublicSubnets:
+        Export:
+            Name: ${AWS::StackName}-PublicSubnets
+        Value:
+            - ','
+            - - PublicSubnet1
+              - PublicSubnet2
+    PublicSubnetsIpv6CidrBlocks:
+        Description: Comma-delimited list of IPv6 CIDR blocks for the public subnets.
+        Export:
+            Name: ${AppName}-${EnvironmentName}-PublicSubnetsIpv6CidrBlocks
+        Value:
+            - ','
+            - - - 0
+                - PublicSubnet1.Ipv6CidrBlocks
+              - - 0
+                - PublicSubnet2.Ipv6CidrBlocks
+    ServiceDiscoveryNamespaceID:
+        Export:
+            Name: ${AWS::StackName}-ServiceDiscoveryNamespaceID
+        Value: ServiceDiscoveryNamespace.Id
+    VpcId:
+        Export:
+            Name: ${AWS::StackName}-VpcId
+        Value: VPC
+    VpcIpv6CidrBlock:
+        Description: The Amazon-provided IPv6 /56 CIDR associated with the VPC.
+        Export:
+            Name: ${AppName}-${EnvironmentName}-VpcIpv6CidrBlock
+        Value:
+            - 0
+            - VPC.Ipv6CidrBlocks
+Parameters:
+    ALBWorkloads:
+        Type: String
+    Aliases:
+        Type: String
+    AppDNSDelegationRole:
+        Type: String
+    AppDNSName:
+        Type: String
+    AppName:
+        Type: String
+    AppRunnerPrivateWorkloads:
+        Type: String
+    CreateHTTPSListener:
+        AllowedValues:
+            - true
+            - false
+        Type: String
+    CreateInternalHTTPSListener:
+        AllowedValues:
+            - true
+            - false
+        Type: String
+    EFSWorkloads:
+        Type: String
+    EnvironmentName:
+        Type: String
+    InternalALBWorkloads:
+        Type: String
+    NATWorkloads:
+        Type: String
+    ServiceDiscoveryEndpoint:
+        Type: String
+    ToolsAccountPrincipalARN:
+        Type: String
+Resources:
+    AppRunnerVpcEndpoint:
+        Condition: CreateAppRunnerVPCEndpoint
+        Metadata:
+            aws:copilot:description: VPC Endpoint to connect environment to App Runner for private services
+        Properties:
+            SecurityGroupIds:
+                - AppRunnerVpcEndpointSecurityGroup
+            ServiceName: com.amazonaws.${AWS::Region}.apprunner.requests
+            SubnetIds:
+                - PrivateSubnet1
+                - PrivateSubnet2
+            VpcEndpointType: Interface
+            VpcId: VPC
+        Type: AWS::EC2::VPCEndpoint
+    AppRunnerVpcEndpointSecurityGroup:
+        Condition: CreateAppRunnerVPCEndpoint
+        Metadata:
+            aws:copilot:description: A security group for App Runner private services
+        Properties:
+            GroupDescription: demo-test-AppRunnerVpcEndpointSecurityGroup
+            Tags:
+                - Key: Name
+                  Value: copilot-demo-test-app-runner-vpc-endpoint
+            VpcId: VPC
+        Type: AWS::EC2::SecurityGroup
+    AppRunnerVpcEndpointSecurityGroupIngressFromEnvironment:
+        Condition: CreateAppRunnerVPCEndpoint
+        Properties:
+            Description: Ingress from services in the environment
+            GroupId: AppRunnerVpcEndpointSecurityGroup
+            IpProtocol: -1
+            SourceSecurityGroupId: EnvironmentSecurityGroup
+        Type: AWS::EC2::SecurityGroupIngress
+    CertificateValidationFunction:
+        Condition: DelegateDNS
+        Properties:
+            Handler: index.certificateRequestHandler
+            MemorySize: 512
+            Role: CustomResourceRole.Arn
+            Runtime: nodejs24.x
+            Timeout: 900
+        Type: AWS::Lambda::Function
+    CloudformationExecutionRole:
+        DeletionPolicy: Retain
+        Metadata:
+            aws:copilot:description: An IAM Role for AWS CloudFormation to manage resources
+        Properties:
+            AssumeRolePolicyDocument:
+                Statement:
+                    - Action: sts:AssumeRole
+                      Effect: Allow
+                      Principal:
+                        Service:
+                            - cloudformation.amazonaws.com
+                Version: "2012-10-17"
+            Path: /
+            Policies:
+                - PolicyDocument:
+                    Statement:
+                        - Effect: Allow
+                          NotAction:
+                            - organizations:*
+                            - account:*
+                          Resource: '*'
+                        - Action:
+                            - organizations:DescribeOrganization
+                            - account:ListRegions
+                          Effect: Allow
+                          Resource: '*'
+                    Version: "2012-10-17"
+                  PolicyName: executeCfn
+            RoleName: ${AWS::StackName}-CFNExecutionRole
+        Type: AWS::IAM::Role
+    Cluster:
+        Metadata:
+            aws:copilot:description: An ECS cluster to group your services
+        Properties:
+            CapacityProviders:
+                - FARGATE
+                - FARGATE_SPOT
+            ClusterSettings:
+                - Name: containerInsights
+                  Value: disabled
+            Configuration:
+                ExecuteCommandConfiguration:
+                    Logging: DEFAULT
+        Type: AWS::ECS::Cluster
+    CustomDomainAction:
+        Condition: ManagedAliases
+        Metadata:
+            aws:copilot:description: Add an A-record to the hosted zone for the domain alias
+        Properties:
+            Aliases: Aliases
+            AppDNSRole: AppDNSDelegationRole
+            AppName: AppName
+            DomainName: AppDNSName
+            EnvName: EnvironmentName
+            PublicAccessDNS: PublicLoadBalancer.DNSName
+            PublicAccessHostedZone: PublicLoadBalancer.CanonicalHostedZoneID
+            ServiceToken: CustomDomainFunction.Arn
+        Type: Custom::CustomDomainFunction
+    CustomDomainFunction:
+        Condition: ManagedAliases
+        Properties:
+            Handler: index.handler
+            MemorySize: 512
+            Role: CustomResourceRole.Arn
+            Runtime: nodejs24.x
+            Timeout: 600
+        Type: AWS::Lambda::Function
+    CustomResourceRole:
+        Condition: DelegateDNS
+        Metadata:
+            aws:copilot:description: An IAM role to manage certificates and Route53 hosted zones
+        Properties:
+            AssumeRolePolicyDocument:
+                Statement:
+                    - Action:
+                        - sts:AssumeRole
+                      Effect: Allow
+                      Principal:
+                        Service:
+                            - lambda.amazonaws.com
+                Version: "2012-10-17"
+            Path: /
+            Policies:
+                - PolicyDocument:
+                    Statement:
+                        - Action:
+                            - acm:ListCertificates
+                            - acm:RequestCertificate
+                            - acm:DescribeCertificate
+                            - acm:GetCertificate
+                            - acm:DeleteCertificate
+                            - acm:AddTagsToCertificate
+                            - sts:AssumeRole
+                            - logs:*
+                            - route53:ChangeResourceRecordSets
+                            - route53:Get*
+                            - route53:Describe*
+                            - route53:ListResourceRecordSets
+                            - route53:ListHostedZonesByName
+                          Effect: Allow
+                          Resource:
+                            - '*'
+                    Version: "2012-10-17"
+                  PolicyName: DNSandACMAccess
+        Type: AWS::IAM::Role
+    DNSDelegationFunction:
+        Condition: DelegateDNS
+        Properties:
+            Handler: index.domainDelegationHandler
+            MemorySize: 512
+            Role: CustomResourceRole.Arn
+            Runtime: nodejs24.x
+            Timeout: 600
+        Type: AWS::Lambda::Function
+    DefaultHTTPTargetGroup:
+        Condition: CreateALB
+        Properties:
+            HealthCheckIntervalSeconds: 10
+            HealthCheckTimeoutSeconds: 5
+            HealthyThresholdCount: 2
+            Port: 80
+            Protocol: HTTP
+            TargetGroupAttributes:
+                - Key: deregistration_delay.timeout_seconds
+                  Value: 60
+            TargetType: ip
+            VpcId: VPC
+        Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DefaultInternalHTTPTargetGroup:
+        Condition: CreateInternalALB
+        Properties:
+            HealthCheckIntervalSeconds: 10
+            HealthCheckTimeoutSeconds: 5
+            HealthyThresholdCount: 2
+            Port: 80
+            Protocol: HTTP
+            TargetGroupAttributes:
+                - Key: deregistration_delay.timeout_seconds
+                  Value: 60
+            TargetType: ip
+            VpcId: VPC
+        Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DefaultPublicRoute:
+        DependsOn: InternetGatewayAttachment
+        Properties:
+            DestinationCidrBlock: 0.0.0.0/0
+            GatewayId: InternetGateway
+            RouteTableId: PublicRouteTable
+        Type: AWS::EC2::Route
+    DefaultPublicRouteIPv6:
+        DependsOn: InternetGatewayAttachment
+        Properties:
+            DestinationIpv6CidrBlock: ::/0
+            GatewayId: InternetGateway
+            RouteTableId: PublicRouteTable
+        Type: AWS::EC2::Route
+    DelegateDNSAction:
+        Condition: DelegateDNS
+        DependsOn:
+            - DNSDelegationFunction
+            - EnvironmentHostedZone
+        Metadata:
+            aws:copilot:description: Delegate DNS for environment subdomain
+        Properties:
+            DomainName: ${AppName}.${AppDNSName}
+            NameServers: EnvironmentHostedZone.NameServers
+            RootDNSRole: AppDNSDelegationRole
+            ServiceToken: DNSDelegationFunction.Arn
+            SubdomainName: ${EnvironmentName}.${AppName}.${AppDNSName}
+        Type: Custom::DNSDelegationFunction
+    EFSSecurityGroup:
+        Condition: CreateEFS
+        Metadata:
+            aws:copilot:description: A security group to allow your containers to talk to EFS storage
+        Properties:
+            GroupDescription:
+                - ""
+                - - AppName
+                  - '-'
+                  - EnvironmentName
+                  - EFSSecurityGroup
+            Tags:
+                - Key: Name
+                  Value: copilot-${AppName}-${EnvironmentName}-efs
+            VpcId: VPC
+        Type: AWS::EC2::SecurityGroup
+    EFSSecurityGroupIngressFromEnvironment:
+        Condition: CreateEFS
+        Properties:
+            Description: Ingress from containers in the Environment Security Group.
+            GroupId: EFSSecurityGroup
+            IpProtocol: -1
+            SourceSecurityGroupId: EnvironmentSecurityGroup
+        Type: AWS::EC2::SecurityGroupIngress
+    EgressOnlyInternetGateway:
+        Metadata:
+            aws:copilot:description: An egress-only internet gateway for private subnets to reach the IPv6 internet
+        Properties:
+            VpcId: VPC
+        Type: AWS::EC2::EgressOnlyInternetGateway
+    EnvironmentHTTPSSecurityGroupIngressFromPublicALB:
+        Condition: ExportHTTPSListener
+        Properties:
+            Description: HTTPS ingress from the public ALB
+            GroupId: EnvironmentSecurityGroup
+            IpProtocol: -1
+            SourceSecurityGroupId: PublicHTTPSLoadBalancerSecurityGroup
+        Type: AWS::EC2::SecurityGroupIngress
+    EnvironmentHTTPSecurityGroupIngressFromPublicALB:
+        Condition: CreateALB
+        Properties:
+            Description: HTTP ingress from the public ALB
+            GroupId: EnvironmentSecurityGroup
+            IpProtocol: -1
+            SourceSecurityGroupId: PublicHTTPLoadBalancerSecurityGroup
+        Type: AWS::EC2::SecurityGroupIngress
+    EnvironmentHostedZone:
+        Condition: DelegateDNS
+        Metadata:
+            aws:copilot:description: A Route 53 Hosted Zone for the environment's subdomain
+        Properties:
+            HostedZoneConfig:
+                Comment: HostedZone for environment ${EnvironmentName} - ${EnvironmentName}.${AppName}.${AppDNSName}
+            Name: ${EnvironmentName}.${AppName}.${AppDNSName}
+        Type: AWS::Route53::HostedZone
+    EnvironmentManagerRole:
+        DeletionPolicy: Retain
+        DependsOn: CloudformationExecutionRole
+        Metadata:
+            aws:copilot:description: An IAM Role to describe resources in your environment
+        Properties:
+            AssumeRolePolicyDocument:
+                Statement:
+                    - Action: sts:AssumeRole
+                      Effect: Allow
+                      Principal:
+                        AWS: ${ToolsAccountPrincipalARN}
+                Version: "2012-10-17"
+            Path: /
+            Policies:
+                - PolicyDocument:
+                    Statement:
+                        - Action:
+                            - logs:GetLogRecord
+                            - logs:GetQueryResults
+                            - logs:StartQuery
+                            - logs:GetLogEvents
+                            - logs:DescribeLogStreams
+                            - logs:StopQuery
+                            - logs:TestMetricFilter
+                            - logs:FilterLogEvents
+                            - logs:GetLogGroupFields
+                            - logs:GetLogDelivery
+                          Effect: Allow
+                          Resource: '*'
+                          Sid: CloudwatchLogs
+                        - Action:
+                            - cloudwatch:DescribeAlarms
+                          Effect: Allow
+                          Resource: '*'
+                          Sid: Cloudwatch
+                        - Action:
+                            - ecs:ListAttributes
+                            - ecs:ListTasks
+                            - ecs:DescribeServices
+                            - ecs:DescribeTaskSets
+                            - ecs:ListContainerInstances
+                            - ecs:DescribeContainerInstances
+                            - ecs:DescribeTasks
+                            - ecs:DescribeClusters
+                            - ecs:UpdateService
+                            - ecs:PutAttributes
+                            - ecs:StartTelemetrySession
+                            - ecs:StartTask
+                            - ecs:StopTask
+                            - ecs:ListServices
+                            - ecs:ListTaskDefinitionFamilies
+                            - ecs:DescribeTaskDefinition
+                            - ecs:ListTaskDefinitions
+                            - ecs:ListClusters
+                            - ecs:RunTask
+                            - ecs:ListServicesByNamespace
+                          Effect: Allow
+                          Resource: '*'
+                          Sid: ECS
+                        - Action:
+                            - ecs:ExecuteCommand
+                            - ssm:StartSession
+                          Condition:
+                            StringEquals:
+                                aws:ResourceTag/copilot-application: ${AppName}
+                                aws:ResourceTag/copilot-environment: ${EnvironmentName}
+                          Effect: Allow
+                          Resource: '*'
+                          Sid: ExecuteCommand
+                        - Action:
+                            - states:StartExecution
+                            - states:DescribeStateMachine
+                          Effect: Allow
+                          Resource:
+                            - arn:${AWS::Partition}:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${AppName}-${EnvironmentName}-*
+                          Sid: StartStateMachine
+                        - Action:
+                            - cloudformation:CancelUpdateStack
+                            - cloudformation:CreateChangeSet
+                            - cloudformation:CreateStack
+                            - cloudformation:DeleteChangeSet
+                            - cloudformation:DeleteStack
+                            - cloudformation:Describe*
+                            - cloudformation:DetectStackDrift
+                            - cloudformation:DetectStackResourceDrift
+                            - cloudformation:ExecuteChangeSet
+                            - cloudformation:GetTemplate
+                            - cloudformation:GetTemplateSummary
+                            - cloudformation:UpdateStack
+                            - cloudformation:UpdateTerminationProtection
+                          Effect: Allow
+                          Resource: '*'
+                          Sid: CloudFormation
+                        - Action:
+                            - iam:GetRole
+                            - iam:PassRole
+                          Condition:
+                            StringEquals:
+                                iam:ResourceTag/copilot-application: ${AppName}
+                                iam:ResourceTag/copilot-environment: ${EnvironmentName}
+                          Effect: Allow
+                          Resource: '*'
+                          Sid: GetAndPassCopilotRoles
+                        - Action:
+                            - ecr:BatchGetImage
+                            - ecr:BatchCheckLayerAvailability
+                            - ecr:CompleteLayerUpload
+                            - ecr:DescribeImages
+                            - ecr:DescribeRepositories
+                            - ecr:GetDownloadUrlForLayer
+                            - ecr:InitiateLayerUpload
+                            - ecr:ListImages
+                            - ecr:ListTagsForResource
+                            - ecr:PutImage
+                            - ecr:UploadLayerPart
+                            - ecr:GetAuthorizationToken
+                          Effect: Allow
+                          Resource: '*'
+                          Sid: ECR
+                        - Action:
+                            - resource-groups:GetGroup
+                            - resource-groups:GetGroupQuery
+                            - resource-groups:GetTags
+                            - resource-groups:ListGroupResources
+                            - resource-groups:ListGroups
+                            - resource-groups:SearchResources
+                          Effect: Allow
+                          Resource: '*'
+                          Sid: ResourceGroups
+                        - Action:
+                            - ssm:DeleteParameter
+                            - ssm:DeleteParameters
+                            - ssm:GetParameter
+                            - ssm:GetParameters
+                            - ssm:GetParametersByPath
+                          Effect: Allow
+                          Resource: '*'
+                          Sid: SSM
+                        - Action:
+                            - ssm:PutParameter
+                            - ssm:AddTagsToResource
+                          Effect: Allow
+                          Resource:
+                            - arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/copilot/${AppName}/${EnvironmentName}/secrets/*
+                          Sid: SSMSecret
+                        - Action:
+                            - ssm:StartSession
+                          Effect: Allow
+                          Resource:
+                            - arn:${AWS::Partition}:ssm:${AWS::Region}::document/AWS-StartPortForwardingSessionToRemoteHost
+                          Sid: SSMSession
+                        - Action:
+                            - elasticloadbalancing:DescribeLoadBalancerAttributes
+                            - elasticloadbalancing:DescribeSSLPolicies
+                            - elasticloadbalancing:DescribeLoadBalancers
+                            - elasticloadbalancing:DescribeTargetGroupAttributes
+                            - elasticloadbalancing:DescribeListeners
+                            - elasticloadbalancing:DescribeTags
+                            - elasticloadbalancing:DescribeTargetHealth
+                            - elasticloadbalancing:DescribeTargetGroups
+                            - elasticloadbalancing:DescribeRules
+                          Effect: Allow
+                          Resource: '*'
+                          Sid: ELBv2
+                        - Action:
+                            - s3:ListBucketByTags
+                            - s3:GetLifecycleConfiguration
+                            - s3:GetBucketTagging
+                            - s3:GetInventoryConfiguration
+                            - s3:GetObjectVersionTagging
+                            - s3:ListBucketVersions
+                            - s3:GetBucketLogging
+                            - s3:ListBucket
+                            - s3:GetAccelerateConfiguration
+                            - s3:GetBucketPolicy
+                            - s3:GetObjectVersionTorrent
+                            - s3:GetObjectAcl
+                            - s3:GetEncryptionConfiguration
+                            - s3:GetBucketRequestPayment
+                            - s3:GetObjectVersionAcl
+                            - s3:GetObjectTagging
+                            - s3:GetMetricsConfiguration
+                            - s3:HeadBucket
+                            - s3:GetBucketPublicAccessBlock
+                            - s3:GetBucketPolicyStatus
+                            - s3:ListBucketMultipartUploads
+                            - s3:GetBucketWebsite
+                            - s3:ListJobs
+                            - s3:GetBucketVersioning
+                            - s3:GetBucketAcl
+                            - s3:GetBucketNotification
+                            - s3:GetReplicationConfiguration
+                            - s3:ListMultipartUploadParts
+                            - s3:GetObject
+                            - s3:GetObjectTorrent
+                            - s3:GetAccountPublicAccessBlock
+                            - s3:ListAllMyBuckets
+                            - s3:DescribeJob
+                            - s3:GetBucketCORS
+                            - s3:GetAnalyticsConfiguration
+                            - s3:GetObjectVersionForReplication
+                            - s3:GetBucketLocation
+                            - s3:GetObjectVersion
+                            - kms:Decrypt
+                          Effect: Allow
+                          Resource: '*'
+                          Sid: BuiltArtifactAccess
+                        - Action:
+                            - s3:PutObject
+                            - s3:PutObjectAcl
+                          Effect: Allow
+                          Resource:
+                            - arn:aws:s3:::mockbucket
+                            - arn:aws:s3:::mockbucket/*
+                          Sid: PutObjectsToArtifactBucket
+                        - Action:
+                            - kms:GenerateDataKey
+                          Effect: Allow
+                          Resource: arn:aws:kms:us-west-2:000000000:key/1234abcd-12ab-34cd-56ef-1234567890ab
+                          Sid: EncryptObjectsInArtifactBucket
+                        - Action:
+                            - ec2:DescribeSubnets
+                            - ec2:DescribeSecurityGroups
+                            - ec2:DescribeNetworkInterfaces
+                            - ec2:DescribeRouteTables
+                          Effect: Allow
+                          Resource: '*'
+                          Sid: EC2
+                        - Action:
+                            - apprunner:DescribeService
+                            - apprunner:ListOperations
+                            - apprunner:ListServices
+                            - apprunner:PauseService
+                            - apprunner:ResumeService
+                            - apprunner:StartDeployment
+                            - apprunner:DescribeObservabilityConfiguration
+                            - apprunner:DescribeVpcIngressConnection
+                          Effect: Allow
+                          Resource: '*'
+                          Sid: AppRunner
+                        - Action:
+                            - tag:GetResources
+                          Effect: Allow
+                          Resource: '*'
+                          Sid: Tags
+                        - Action:
+                            - application-autoscaling:DescribeScalingPolicies
+                          Effect: Allow
+                          Resource: '*'
+                          Sid: ApplicationAutoscaling
+                        - Action:
+                            - iam:DeleteRole
+                            - iam:ListRolePolicies
+                            - iam:DeleteRolePolicy
+                          Effect: Allow
+                          Resource:
+                            - CloudformationExecutionRole.Arn
+                            - arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${AWS::StackName}-EnvManagerRole
+                          Sid: DeleteRoles
+                        - Action:
+                            - cloudformation:DescribeStacks
+                            - cloudformation:DeleteStack
+                          Effect: Allow
+                          Resource:
+                            - arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}/*
+                          Sid: DeleteEnvStack
+                        - Action:
+                            - cloudformation:ListStacks
+                          Effect: Allow
+                          Resource: '*'
+                          Sid: ListStacks
+                        - Action:
+                            - rds:DescribeDBInstances
+                            - rds:DescribeDBClusters
+                          Effect: Allow
+                          Resource: '*'
+                          Sid: RDS
+                    Version: "2012-10-17"
+                  PolicyName: root
+            RoleName: ${AWS::StackName}-EnvManagerRole
+        Type: AWS::IAM::Role
+    EnvironmentSecurityGroup:
+        Metadata:
+            aws:copilot:description: A security group to allow your containers to talk to each other
+        Properties:
+            GroupDescription:
+                - ""
+                - - AppName
+                  - '-'
+                  - EnvironmentName
+                  - EnvironmentSecurityGroup
+            Tags:
+                - Key: Name
+                  Value: copilot-${AppName}-${EnvironmentName}-env
+            VpcId: VPC
+        Type: AWS::EC2::SecurityGroup
+    EnvironmentSecurityGroupIngressFromInternalALB:
+        Condition: CreateInternalALB
+        Properties:
+            Description: Ingress from the internal ALB
+            GroupId: EnvironmentSecurityGroup
+            IpProtocol: -1
+            SourceSecurityGroupId: InternalLoadBalancerSecurityGroup
+        Type: AWS::EC2::SecurityGroupIngress
+    EnvironmentSecurityGroupIngressFromSelf:
+        Properties:
+            Description: Ingress from other containers in the same security group
+            GroupId: EnvironmentSecurityGroup
+            IpProtocol: -1
+            SourceSecurityGroupId: EnvironmentSecurityGroup
+        Type: AWS::EC2::SecurityGroupIngress
+    FileSystem:
+        Condition: CreateEFS
+        Metadata:
+            aws:copilot:description: An EFS filesystem for persistent task storage
+        Properties:
+            BackupPolicy:
+                Status: ENABLED
+            Encrypted: true
+            FileSystemPolicy:
+                Id: CopilotEFSPolicy
+                Statement:
+                    - Action:
+                        - elasticfilesystem:ClientWrite
+                        - elasticfilesystem:ClientMount
+                      Condition:
+                        Bool:
+                            elasticfilesystem:AccessedViaMountTarget: true
+                        StringEquals:
+                            iam:ResourceTag/copilot-application: ${AppName}
+                            iam:ResourceTag/copilot-environment: ${EnvironmentName}
+                      Effect: Allow
+                      Principal:
+                        AWS: '*'
+                      Sid: AllowIAMFromTaggedRoles
+                    - Action: elasticfilesystem:*
+                      Condition:
+                        Bool:
+                            aws:SecureTransport: false
+                      Effect: Deny
+                      Principal: '*'
+                      Sid: DenyUnencryptedAccess
+                Version: "2012-10-17"
+            LifecyclePolicies:
+                - TransitionToIA: AFTER_30_DAYS
+            PerformanceMode: generalPurpose
+            ThroughputMode: bursting
+        Type: AWS::EFS::FileSystem
+    HTTPListener:
+        Condition: CreateALB
+        Metadata:
+            aws:copilot:description: A load balancer listener to route HTTP traffic
+        Properties:
+            DefaultActions:
+                - TargetGroupArn: DefaultHTTPTargetGroup
+                  Type: forward
+            LoadBalancerArn: PublicLoadBalancer
+            Port: 80
+            Protocol: HTTP
+        Type: AWS::ElasticLoadBalancingV2::Listener
+    HTTPSCert:
+        Condition: DelegateDNS
+        DependsOn:
+            - CertificateValidationFunction
+            - EnvironmentHostedZone
+            - DelegateDNSAction
+        Metadata:
+            aws:copilot:description: Request and validate an ACM certificate for your domain
+        Properties:
+            Aliases: Aliases
+            AppName: AppName
+            DomainName: AppDNSName
+            EnvHostedZoneId: EnvironmentHostedZone
+            EnvName: EnvironmentName
+            Region: AWS::Region
+            RootDNSRole: AppDNSDelegationRole
+            ServiceToken: CertificateValidationFunction.Arn
+        Type: Custom::CertificateValidationFunction
+    HTTPSListener:
+        Condition: ExportHTTPSListener
+        Metadata:
+            aws:copilot:description: A load balancer listener to route HTTPS traffic
+        Properties:
+            Certificates:
+                - CertificateArn: HTTPSCert
+            DefaultActions:
+                - TargetGroupArn: DefaultHTTPTargetGroup
+                  Type: forward
+            LoadBalancerArn: PublicLoadBalancer
+            Port: 443
+            Protocol: HTTPS
+        Type: AWS::ElasticLoadBalancingV2::Listener
+    InternalALBIngressFromEnvironmentSecurityGroup:
+        Condition: CreateInternalALB
+        Properties:
+            Description: Ingress from the env security group
+            GroupId: InternalLoadBalancerSecurityGroup
+            IpProtocol: -1
+            SourceSecurityGroupId: EnvironmentSecurityGroup
+        Type: AWS::EC2::SecurityGroupIngress
+    InternalHTTPListener:
+        Condition: CreateInternalALB
+        Metadata:
+            aws:copilot:description: An internal load balancer listener to route HTTP traffic
+        Properties:
+            DefaultActions:
+                - TargetGroupArn: DefaultInternalHTTPTargetGroup
+                  Type: forward
+            LoadBalancerArn: InternalLoadBalancer
+            Port: 80
+            Protocol: HTTP
+        Type: AWS::ElasticLoadBalancingV2::Listener
+    InternalHTTPSListener:
+        Condition: ExportInternalHTTPSListener
+        Metadata:
+            aws:copilot:description: An internal load balancer listener to route HTTPS traffic
+        Properties:
+            DefaultActions:
+                - TargetGroupArn: DefaultInternalHTTPTargetGroup
+                  Type: forward
+            LoadBalancerArn: InternalLoadBalancer
+            Port: 443
+            Protocol: HTTPS
+        Type: AWS::ElasticLoadBalancingV2::Listener
+    InternalLoadBalancer:
+        Condition: CreateInternalALB
+        Metadata:
+            aws:copilot:description: An internal Application Load Balancer to distribute private traffic from within the VPC to your services
+        Properties:
+            Scheme: internal
+            SecurityGroups:
+                - InternalLoadBalancerSecurityGroup.GroupId
+            Subnets:
+                - PrivateSubnet1
+                - PrivateSubnet2
+            Type: application
+        Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    InternalLoadBalancerSecurityGroup:
+        Condition: CreateInternalALB
+        Metadata:
+            aws:copilot:description: A security group for your internal load balancer allowing HTTP traffic from within the VPC
+        Properties:
+            GroupDescription: Access to the internal load balancer
+            Tags:
+                - Key: Name
+                  Value: copilot-${AppName}-${EnvironmentName}-internal-lb
+            VpcId: VPC
+        Type: AWS::EC2::SecurityGroup
+    InternalWorkloadsHostedZone:
+        Condition: CreateInternalALB
+        Metadata:
+            aws:copilot:description: A hosted zone named test.demo.internal for backends behind a private load balancer
+        Properties:
+            Name: ${EnvironmentName}.${AppName}.internal
+            VPCs:
+                - VPCId: VPC
+                  VPCRegion: AWS::Region
+        Type: AWS::Route53::HostedZone
+    InternetGateway:
+        Metadata:
+            aws:copilot:description: An Internet Gateway to connect to the public internet
+        Properties:
+            Tags:
+                - Key: Name
+                  Value: copilot-${AppName}-${EnvironmentName}
+        Type: AWS::EC2::InternetGateway
+    InternetGatewayAttachment:
+        Properties:
+            InternetGatewayId: InternetGateway
+            VpcId: VPC
+        Type: AWS::EC2::VPCGatewayAttachment
+    LogResourcePolicy:
+        Metadata:
+            aws:copilot:description: A resource policy to allow AWS services to create log streams for your workloads.
+        Properties:
+            PolicyDocument:
+                Fn::Sub: |
+                    {
+                      "Version": "2012-10-17",
+                      "Statement": [
+                        {
+                          "Sid": "StateMachineToCloudWatchLogs",
+                          "Effect": "Allow",
+                          "Principal": {
+                            "Service": ["delivery.logs.amazonaws.com"]
+                          },
+                          "Action": [
+                            "logs:CreateLogStream",
+                            "logs:PutLogEvents"
+                          ],
+                          "Resource": [
+                            "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/copilot/${AppName}-${EnvironmentName}-*:log-stream:*"
+                          ],
+                          "Condition": {
+                            "StringEquals": {
+                              "aws:SourceAccount": "${AWS::AccountId}"
+                            },
+                            "ArnLike": {
+                              "aws:SourceArn": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:*"
+                            }
+                          }
+                        }
+                      ]
+                    }
+            PolicyName: ${AppName}-${EnvironmentName}-LogResourcePolicy
+        Type: AWS::Logs::ResourcePolicy
+    MountTarget1:
+        Condition: CreateEFS
+        Properties:
+            FileSystemId: FileSystem
+            SecurityGroups:
+                - EFSSecurityGroup
+            SubnetId: PrivateSubnet1
+        Type: AWS::EFS::MountTarget
+    MountTarget2:
+        Condition: CreateEFS
+        Properties:
+            FileSystemId: FileSystem
+            SecurityGroups:
+                - EFSSecurityGroup
+            SubnetId: PrivateSubnet2
+        Type: AWS::EFS::MountTarget
+    NatGateway1:
+        Condition: CreateNATGateways
+        Metadata:
+            aws:copilot:description: NAT Gateway 1 enabling workloads placed in private subnet 1 to reach the internet
+        Properties:
+            AllocationId: NatGateway1Attachment.AllocationId
+            SubnetId: PublicSubnet1
+            Tags:
+                - Key: Name
+                  Value: copilot-${AppName}-${EnvironmentName}-0
+        Type: AWS::EC2::NatGateway
+    NatGateway1Attachment:
+        Condition: CreateNATGateways
+        DependsOn: InternetGatewayAttachment
+        Metadata:
+            aws:copilot:description: An Elastic IP for NAT Gateway 1
+        Properties:
+            Domain: vpc
+        Type: AWS::EC2::EIP
+    NatGateway2:
+        Condition: CreateNATGateways
+        Metadata:
+            aws:copilot:description: NAT Gateway 2 enabling workloads placed in private subnet 2 to reach the internet
+        Properties:
+            AllocationId: NatGateway2Attachment.AllocationId
+            SubnetId: PublicSubnet2
+            Tags:
+                - Key: Name
+                  Value: copilot-${AppName}-${EnvironmentName}-1
+        Type: AWS::EC2::NatGateway
+    NatGateway2Attachment:
+        Condition: CreateNATGateways
+        DependsOn: InternetGatewayAttachment
+        Metadata:
+            aws:copilot:description: An Elastic IP for NAT Gateway 2
+        Properties:
+            Domain: vpc
+        Type: AWS::EC2::EIP
+    PrivateRoute1:
+        Condition: CreateNATGateways
+        Properties:
+            DestinationCidrBlock: 0.0.0.0/0
+            NatGatewayId: NatGateway1
+            RouteTableId: PrivateRouteTable1
+        Type: AWS::EC2::Route
+    PrivateRoute2:
+        Condition: CreateNATGateways
+        Properties:
+            DestinationCidrBlock: 0.0.0.0/0
+            NatGatewayId: NatGateway2
+            RouteTableId: PrivateRouteTable2
+        Type: AWS::EC2::Route
+    PrivateRouteIPv61:
+        Properties:
+            DestinationIpv6CidrBlock: ::/0
+            EgressOnlyInternetGatewayId: EgressOnlyInternetGateway
+            RouteTableId: PrivateRouteTable1
+        Type: AWS::EC2::Route
+    PrivateRouteIPv62:
+        Properties:
+            DestinationIpv6CidrBlock: ::/0
+            EgressOnlyInternetGatewayId: EgressOnlyInternetGateway
+            RouteTableId: PrivateRouteTable2
+        Type: AWS::EC2::Route
+    PrivateRouteTable1:
+        Condition: CreatePrivateRouteTables
+        Properties:
+            VpcId: VPC
+        Type: AWS::EC2::RouteTable
+    PrivateRouteTable1Association:
+        Condition: CreatePrivateRouteTables
+        Properties:
+            RouteTableId: PrivateRouteTable1
+            SubnetId: PrivateSubnet1
+        Type: AWS::EC2::SubnetRouteTableAssociation
+    PrivateRouteTable2:
+        Condition: CreatePrivateRouteTables
+        Properties:
+            VpcId: VPC
+        Type: AWS::EC2::RouteTable
+    PrivateRouteTable2Association:
+        Condition: CreatePrivateRouteTables
+        Properties:
+            RouteTableId: PrivateRouteTable2
+            SubnetId: PrivateSubnet2
+        Type: AWS::EC2::SubnetRouteTableAssociation
+    PrivateSubnet1:
+        DependsOn: VPCCidrBlockIPv6
+        Metadata:
+            aws:copilot:description: Private subnet 1 for resources with no internet access
+        Properties:
+            AssignIpv6AddressOnCreation: true
+            AvailabilityZone:
+                - 0
+                - ""
+            CidrBlock: 10.0.2.0/24
+            Ipv6CidrBlock:
+                - 2
+                - - - 0
+                    - VPC.Ipv6CidrBlocks
+                  - 256
+                  - 64
+            MapPublicIpOnLaunch: false
+            Tags:
+                - Key: Name
+                  Value: copilot-${AppName}-${EnvironmentName}-priv0
+            VpcId: VPC
+        Type: AWS::EC2::Subnet
+    PrivateSubnet2:
+        DependsOn: VPCCidrBlockIPv6
+        Metadata:
+            aws:copilot:description: Private subnet 2 for resources with no internet access
+        Properties:
+            AssignIpv6AddressOnCreation: true
+            AvailabilityZone:
+                - 1
+                - ""
+            CidrBlock: 10.0.3.0/24
+            Ipv6CidrBlock:
+                - 3
+                - - - 0
+                    - VPC.Ipv6CidrBlocks
+                  - 256
+                  - 64
+            MapPublicIpOnLaunch: false
+            Tags:
+                - Key: Name
+                  Value: copilot-${AppName}-${EnvironmentName}-priv1
+            VpcId: VPC
+        Type: AWS::EC2::Subnet
+    PublicHTTPLoadBalancerSecurityGroup:
+        Condition: CreateALB
+        Metadata:
+            aws:copilot:description: A security group for your load balancer allowing HTTP traffic
+        Properties:
+            GroupDescription: HTTP access to the public facing load balancer
+            SecurityGroupIngress:
+                - CidrIp: 0.0.0.0/0
+                  Description: Allow from anyone on port 80
+                  FromPort: 80
+                  IpProtocol: tcp
+                  ToPort: 80
+            Tags:
+                - Key: Name
+                  Value: copilot-${AppName}-${EnvironmentName}-lb-http
+            VpcId: VPC
+        Type: AWS::EC2::SecurityGroup
+    PublicHTTPSLoadBalancerSecurityGroup:
+        Condition: ExportHTTPSListener
+        Metadata:
+            aws:copilot:description: A security group for your load balancer allowing HTTPS traffic
+        Properties:
+            GroupDescription: HTTPS access to the public facing load balancer
+            SecurityGroupIngress:
+                - CidrIp: 0.0.0.0/0
+                  Description: Allow from anyone on port 443
+                  FromPort: 443
+                  IpProtocol: tcp
+                  ToPort: 443
+            Tags:
+                - Key: Name
+                  Value: copilot-${AppName}-${EnvironmentName}-lb-https
+            VpcId: VPC
+        Type: AWS::EC2::SecurityGroup
+    PublicLoadBalancer:
+        Condition: CreateALB
+        Metadata:
+            aws:copilot:description: An Application Load Balancer to distribute public traffic to your services
+        Properties:
+            LoadBalancerAttributes:
+                - Key: access_logs.s3.enabled
+                  Value: false
+            Scheme: internet-facing
+            SecurityGroups:
+                - PublicHTTPLoadBalancerSecurityGroup.GroupId
+                - - ExportHTTPSListener
+                  - PublicHTTPSLoadBalancerSecurityGroup.GroupId
+                  - AWS::NoValue
+            Subnets:
+                - PublicSubnet1
+                - PublicSubnet2
+            Type: application
+        Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    PublicRouteTable:
+        Metadata:
+            aws:copilot:description: A custom route table that directs network traffic for the public subnets
+        Properties:
+            Tags:
+                - Key: Name
+                  Value: copilot-${AppName}-${EnvironmentName}
+            VpcId: VPC
+        Type: AWS::EC2::RouteTable
+    PublicSubnet1:
+        DependsOn: VPCCidrBlockIPv6
+        Metadata:
+            aws:copilot:description: Public subnet 1 for resources that can access the internet
+        Properties:
+            AssignIpv6AddressOnCreation: true
+            AvailabilityZone:
+                - 0
+                - ""
+            CidrBlock: 10.0.0.0/24
+            Ipv6CidrBlock:
+                - 0
+                - - - 0
+                    - VPC.Ipv6CidrBlocks
+                  - 256
+                  - 64
+            MapPublicIpOnLaunch: true
+            Tags:
+                - Key: Name
+                  Value: copilot-${AppName}-${EnvironmentName}-pub0
+            VpcId: VPC
+        Type: AWS::EC2::Subnet
+    PublicSubnet1RouteTableAssociation:
+        Properties:
+            RouteTableId: PublicRouteTable
+            SubnetId: PublicSubnet1
+        Type: AWS::EC2::SubnetRouteTableAssociation
+    PublicSubnet2:
+        DependsOn: VPCCidrBlockIPv6
+        Metadata:
+            aws:copilot:description: Public subnet 2 for resources that can access the internet
+        Properties:
+            AssignIpv6AddressOnCreation: true
+            AvailabilityZone:
+                - 1
+                - ""
+            CidrBlock: 10.0.1.0/24
+            Ipv6CidrBlock:
+                - 1
+                - - - 0
+                    - VPC.Ipv6CidrBlocks
+                  - 256
+                  - 64
+            MapPublicIpOnLaunch: true
+            Tags:
+                - Key: Name
+                  Value: copilot-${AppName}-${EnvironmentName}-pub1
+            VpcId: VPC
+        Type: AWS::EC2::Subnet
+    PublicSubnet2RouteTableAssociation:
+        Properties:
+            RouteTableId: PublicRouteTable
+            SubnetId: PublicSubnet2
+        Type: AWS::EC2::SubnetRouteTableAssociation
+    ServiceDiscoveryNamespace:
+        Metadata:
+            aws:copilot:description: A private DNS namespace for discovering services within the environment
+        Properties:
+            Name: ServiceDiscoveryEndpoint
+            Vpc: VPC
+        Type: AWS::ServiceDiscovery::PrivateDnsNamespace
+    VPC:
+        Metadata:
+            aws:copilot:description: A Virtual Private Cloud to control networking of your AWS resources
+        Properties:
+            CidrBlock: 10.0.0.0/16
+            EnableDnsHostnames: true
+            EnableDnsSupport: true
+            InstanceTenancy: default
+            Tags:
+                - Key: Name
+                  Value: copilot-${AppName}-${EnvironmentName}
+        Type: AWS::EC2::VPC
+    VPCCidrBlockIPv6:
+        Metadata:
+            aws:copilot:description: An Amazon-provided IPv6 /56 CIDR block associated with the VPC
+        Properties:
+            AmazonProvidedIpv6CidrBlock: true
+            VpcId: VPC
+        Type: AWS::EC2::VPCCidrBlock

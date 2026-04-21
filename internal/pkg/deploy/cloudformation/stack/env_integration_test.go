@@ -263,6 +263,33 @@ network:
 			}(),
 			wantedFileName: "template-with-importedvpc-flowlogs.yml",
 		},
+		"ipv6 dual-stack enabled": {
+			input: func() *stack.EnvConfig {
+				rawMft := `name: test
+type: Environment
+network:
+  vpc:
+    ipv6:
+      enabled: true
+`
+				var mft manifest.Environment
+				err := yaml.Unmarshal([]byte(rawMft), &mft)
+				require.NoError(t, err)
+				return &stack.EnvConfig{
+					Version: "1.x",
+					App: deploy.AppInformation{
+						AccountPrincipalARN: "arn:aws:iam::000000000:root",
+						Name:                "demo",
+					},
+					Name:                 "test",
+					ArtifactBucketARN:    "arn:aws:s3:::mockbucket",
+					ArtifactBucketKeyARN: "arn:aws:kms:us-west-2:000000000:key/1234abcd-12ab-34cd-56ef-1234567890ab",
+					Mft:                  &mft,
+					RawMft:               rawMft,
+				}
+			}(),
+			wantedFileName: "template-with-ipv6-enabled.yml",
+		},
 	}
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
@@ -455,4 +482,40 @@ func resetCustomResourceLocations(template map[any]any) {
 		props := fn["Properties"].(map[string]any)
 		delete(props, "Code")
 	}
+}
+
+// TestEnvStack_IPv6ThreadedFromManifest proves the IPv6 flag reaches the
+// env CFN template. INTENTIONALLY FAILS until Task 5 lands the
+// EgressOnlyInternetGateway resource. Once that resource is emitted
+// conditionally on IPv6Enabled, this test passes and the wiring is proven
+// end-to-end.
+func TestEnvStack_IPv6ThreadedFromManifest(t *testing.T) {
+	rawMft := `name: test
+type: Environment
+network:
+  vpc:
+    ipv6:
+      enabled: true
+`
+	var mft manifest.Environment
+	require.NoError(t, yaml.Unmarshal([]byte(rawMft), &mft))
+	envCfg := &stack.EnvConfig{
+		Version: "1.x",
+		App: deploy.AppInformation{
+			AccountPrincipalARN: "arn:aws:iam::000000000:root",
+			Name:                "demo",
+		},
+		Name:                 "test",
+		ArtifactBucketARN:    "arn:aws:s3:::mockbucket",
+		ArtifactBucketKeyARN: "arn:aws:kms:us-west-2:000000000:key/1234abcd-12ab-34cd-56ef-1234567890ab",
+		Mft:                  &mft,
+		RawMft:               rawMft,
+	}
+	envStack, err := stack.NewEnvStackConfig(envCfg)
+	require.NoError(t, err)
+	body, err := envStack.Template()
+	require.NoError(t, err)
+	// Proof the flag reached the template: the EgressOnlyInternetGateway
+	// resource only appears when IPv6Enabled is true.
+	require.Contains(t, body, "EgressOnlyInternetGateway:")
 }

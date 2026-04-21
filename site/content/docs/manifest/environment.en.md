@@ -116,6 +116,30 @@ The ID of the VPC to import. This field is mutually exclusive with `cidr`.
 <span class="parent-field">network.vpc.</span><a id="network-vpc-cidr" href="#network-vpc-cidr" class="field">`cidr`</a> <span class="type">String</span>    
 An IPv4 CIDR block to associate with the Copilot-generated VPC. This field is mutually exclusive with `id`.
 
+<span class="parent-field">network.vpc.</span><a id="network-vpc-ipv6" href="#network-vpc-ipv6" class="field">`ipv6`</a> <span class="type">Map</span>    
+Configures IPv6 dual-stack networking on the managed VPC. Optional. When absent or disabled, the environment is IPv4-only (current behavior).
+
+Example:
+```yaml
+network:
+  vpc:
+    ipv6:
+      enabled: true
+```
+
+When enabled:
+
+- The VPC is associated with an Amazon-provided `/56` IPv6 CIDR block.
+- Every managed subnet receives a disjoint `/64` block.
+- Subnet-level `AssignIpv6AddressOnCreation` is set to `true`.
+- Public subnets get a `::/0` default route to the Internet Gateway.
+- Private subnets get a `::/0` default route to a new Egress-Only Internet Gateway (private subnets retain their existing IPv4 default route through the NAT Gateway, when present).
+
+Restrictions (foundation release):
+
+- Not supported with `network.vpc.id` (imported VPC).
+- Not supported as an in-place toggle on an existing environment — create a new environment with IPv6 enabled.
+
 <span class="parent-field">network.vpc.</span><a id="network-vpc-subnets" href="#network-vpc-subnets" class="field">`subnets`</a> <span class="type">Map</span>    
 Configure public and private subnets in a VPC.
 

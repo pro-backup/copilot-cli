@@ -55,6 +55,11 @@ Conditions:
     !Not [!Equals [ !Ref EFSWorkloads, ""]]
   CreateNATGateways:
     !Not [!Equals [ !Ref NATWorkloads, ""]]
+{{- if .VPCConfig.IPv6Enabled }}
+  CreatePrivateRouteTables: !Or
+    - !Condition CreateNATGateways
+    - !Equals [ "true", "true" ]
+{{- end }}
   CreateAppRunnerVPCEndpoint:
     !Not [!Equals [ !Ref AppRunnerPrivateWorkloads, ""]]
   ManagedAliases: !And
@@ -73,8 +78,8 @@ Resources:
 {{include "cdn-resources" . | indent 2}}
 {{- end}}
 {{- if not .VPCConfig.Imported}}
-{{include "vpc-resources" .VPCConfig.Managed | indent 2}}
-{{include "nat-gateways" .VPCConfig.Managed | indent 2}}
+{{include "vpc-resources" . | indent 2}}
+{{include "nat-gateways" . | indent 2}}
 {{- end}}
   # Creates a service discovery namespace with the form provided in the parameter.
   # For new environments after 1.5.0, this is "env.app.local". For upgraded environments from
@@ -892,3 +897,25 @@ Outputs:
     Export:
       Name: !Sub ${AWS::StackName}-AppRunnerVpcEndpointId
 {{- end}}
+{{- if .VPCConfig.IPv6Enabled }}
+  IPv6Enabled:
+    Description: "Whether the environment VPC has IPv6 dual-stack enabled."
+    Value: "true"
+    Export:
+      Name: !Sub ${AppName}-${EnvironmentName}-IPv6Enabled
+  VpcIpv6CidrBlock:
+    Description: "The Amazon-provided IPv6 /56 CIDR associated with the VPC."
+    Value: !Select [0, !GetAtt VPC.Ipv6CidrBlocks]
+    Export:
+      Name: !Sub ${AppName}-${EnvironmentName}-VpcIpv6CidrBlock
+  PublicSubnetsIpv6CidrBlocks:
+    Description: "Comma-delimited list of IPv6 CIDR blocks for the public subnets."
+    Value: !Join [ ',', [ {{range $ind, $cidr := .VPCConfig.Managed.PublicSubnetCIDRs}}!Select [0, !GetAtt PublicSubnet{{inc $ind}}.Ipv6CidrBlocks], {{end}}] ]
+    Export:
+      Name: !Sub ${AppName}-${EnvironmentName}-PublicSubnetsIpv6CidrBlocks
+  PrivateSubnetsIpv6CidrBlocks:
+    Description: "Comma-delimited list of IPv6 CIDR blocks for the private subnets."
+    Value: !Join [ ',', [ {{range $ind, $cidr := .VPCConfig.Managed.PrivateSubnetCIDRs}}!Select [0, !GetAtt PrivateSubnet{{inc $ind}}.Ipv6CidrBlocks], {{end}}] ]
+    Export:
+      Name: !Sub ${AppName}-${EnvironmentName}-PrivateSubnetsIpv6CidrBlocks
+{{- end }}

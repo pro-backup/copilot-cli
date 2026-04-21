@@ -103,6 +103,13 @@ func ToSnakeCaseFunc(s string) string {
 // IncFunc increments an integer value and returns the result.
 func IncFunc(i int) int { return i + 1 }
 
+// AddFunc returns a + b. Used in env templates for index arithmetic (e.g.,
+// computing `publicSubnetCount + privateIndex` when assigning IPv6 /64 blocks
+// from the VPC /56).
+func AddFunc(a, b int) int {
+	return a + b
+}
+
 // FmtSliceFunc renders a string representation of a go string slice, surrounded by brackets
 // and joined by commas.
 func FmtSliceFunc(elems []string) string {
