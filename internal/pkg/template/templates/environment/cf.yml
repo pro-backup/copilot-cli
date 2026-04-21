@@ -55,6 +55,11 @@ Conditions:
     !Not [!Equals [ !Ref EFSWorkloads, ""]]
   CreateNATGateways:
     !Not [!Equals [ !Ref NATWorkloads, ""]]
+{{- if .VPCConfig.IPv6Enabled }}
+  CreatePrivateRouteTables: !Or
+    - !Condition CreateNATGateways
+    - !Equals [ "true", "true" ]
+{{- end }}
   CreateAppRunnerVPCEndpoint:
     !Not [!Equals [ !Ref AppRunnerPrivateWorkloads, ""]]
   ManagedAliases: !And
@@ -74,7 +79,7 @@ Resources:
 {{- end}}
 {{- if not .VPCConfig.Imported}}
 {{include "vpc-resources" . | indent 2}}
-{{include "nat-gateways" .VPCConfig.Managed | indent 2}}
+{{include "nat-gateways" . | indent 2}}
 {{- end}}
   # Creates a service discovery namespace with the form provided in the parameter.
   # For new environments after 1.5.0, this is "env.app.local". For upgraded environments from
