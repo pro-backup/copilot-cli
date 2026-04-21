@@ -135,6 +135,12 @@ When enabled:
 - Public subnets get a `::/0` default route to the Internet Gateway.
 - Private subnets get a `::/0` default route to a new Egress-Only Internet Gateway (private subnets retain their existing IPv4 default route through the NAT Gateway, when present).
 
+Workload-side effects:
+
+- Every **Linux** workload (Backend Service, Load Balanced Web Service, Worker Service, Scheduled Job) deployed into the environment automatically receives a global IPv6 address on its Fargate task ENI and can reach the IPv6 internet via the Egress-Only Internet Gateway. No per-service manifest field is required.
+- Windows Fargate does not support IPv6 task networking. Windows workloads deployed into a dual-stack environment remain IPv4-only and print a one-line `Note:` at deploy time.
+- The environment's shared security group gains a standalone `::/0` IPv6 egress rule so tasks can reach IPv6 destinations.
+
 Restrictions (foundation release):
 
 - Not supported with `network.vpc.id` (imported VPC).
