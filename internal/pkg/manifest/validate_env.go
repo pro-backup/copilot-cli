@@ -95,6 +95,8 @@ func (cfg environmentVPCConfig) validate() error {
 	if cfg.imported() && cfg.managedVPCCustomized() {
 		return errors.New(`cannot import VPC resources (with "id" fields) and customize VPC resources (with "cidr" and "az" fields) at the same time`)
 	}
+	// IPv6Enabled() has a pointer receiver; validate() uses a value receiver,
+	// so take the address explicitly (auto-addressing does not apply here).
 	if cfg.imported() && (&cfg).IPv6Enabled() {
 		return errIPv6WithImportedVPC
 	}

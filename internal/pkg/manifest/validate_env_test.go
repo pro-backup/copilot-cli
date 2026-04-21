@@ -1137,3 +1137,24 @@ func TestEnvironmentVPCConfig_validate_IPv6DisabledWithImport(t *testing.T) {
 	// imported VPC with ipv6 disabled is fine
 	require.NoError(t, cfg.validate())
 }
+
+func TestEnvironmentVPCConfig_validate_IPv6EmptyStructWithImport(t *testing.T) {
+	// IPv6 field is set but Enabled is nil (i.e. `ipv6: {}` in YAML).
+	// IPv6Enabled() returns false in this case, so validation must pass
+	// even when combined with an imported VPC.
+	cfg := environmentVPCConfig{
+		ID:   aws.String("vpc-12345"),
+		IPv6: &ipv6VPCConfig{},
+		Subnets: subnetsConfiguration{
+			Public: []subnetConfiguration{
+				{SubnetID: aws.String("subnet-1")},
+				{SubnetID: aws.String("subnet-2")},
+			},
+			Private: []subnetConfiguration{
+				{SubnetID: aws.String("subnet-3")},
+				{SubnetID: aws.String("subnet-4")},
+			},
+		},
+	}
+	require.NoError(t, cfg.validate())
+}
