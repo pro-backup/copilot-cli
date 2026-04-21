@@ -1075,3 +1075,79 @@ func TestEC2_ListVPCSubnets_PopulatesIPv6CIDRBlocks(t *testing.T) {
 	require.Empty(t, subnetsByID["subnet-priv"].IPv6CIDRBlocks,
 		"subnets with no IPv6 have empty slice, not nil panic")
 }
+
+func TestEC2_HasVPCIPv6(t *testing.T) {
+	testCases := map[string]struct {
+		describeOutput *ec2.DescribeVpcsOutput
+		wantHas        bool
+	}{
+		"no Ipv6CidrBlockAssociationSet at all": {
+			describeOutput: &ec2.DescribeVpcsOutput{Vpcs: []*ec2.Vpc{{VpcId: aws.String("vpc-a")}}},
+			wantHas:        false,
+		},
+		"all associations disassociated": {
+			describeOutput: &ec2.DescribeVpcsOutput{Vpcs: []*ec2.Vpc{{
+				VpcId: aws.String("vpc-a"),
+				Ipv6CidrBlockAssociationSet: []*ec2.VpcIpv6CidrBlockAssociation{
+					{Ipv6CidrBlock: aws.String("2001:db8::/56"), Ipv6CidrBlockState: &ec2.VpcCidrBlockState{State: aws.String("disassociated")}},
+				},
+			}}},
+			wantHas: false,
+		},
+		"one associated, one disassociated": {
+			describeOutput: &ec2.DescribeVpcsOutput{Vpcs: []*ec2.Vpc{{
+				VpcId: aws.String("vpc-a"),
+				Ipv6CidrBlockAssociationSet: []*ec2.VpcIpv6CidrBlockAssociation{
+					{Ipv6CidrBlock: aws.String("2001:db8::/56"), Ipv6CidrBlockState: &ec2.VpcCidrBlockState{State: aws.String("associated")}},
+					{Ipv6CidrBlock: aws.String("2001:db9::/56"), Ipv6CidrBlockState: &ec2.VpcCidrBlockState{State: aws.String("disassociated")}},
+				},
+			}}},
+			wantHas: true,
+		},
+		"associating (not yet associated)": {
+			describeOutput: &ec2.DescribeVpcsOutput{Vpcs: []*ec2.Vpc{{
+				VpcId: aws.String("vpc-a"),
+				Ipv6CidrBlockAssociationSet: []*ec2.VpcIpv6CidrBlockAssociation{
+					{Ipv6CidrBlock: aws.String("2001:db8::/56"), Ipv6CidrBlockState: &ec2.VpcCidrBlockState{State: aws.String("associating")}},
+				},
+			}}},
+			wantHas: false,
+		},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			m := mocks.NewMockapi(ctrl)
+			m.EXPECT().DescribeVpcs(&ec2.DescribeVpcsInput{
+				VpcIds: aws.StringSlice([]string{"vpc-a"}),
+			}).Return(tc.describeOutput, nil)
+			c := &EC2{client: m}
+
+			got, err := c.HasVPCIPv6("vpc-a")
+			require.NoError(t, err)
+			require.Equal(t, tc.wantHas, got)
+		})
+	}
+}
+
+func TestEC2_HasVPCIPv6_APIError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	m := mocks.NewMockapi(ctrl)
+	m.EXPECT().DescribeVpcs(gomock.Any()).Return(nil, errors.New("access denied"))
+	c := &EC2{client: m}
+
+	_, err := c.HasVPCIPv6("vpc-a")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "describe VPC vpc-a")
+}
+
+func TestEC2_HasVPCIPv6_NotFound(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	m := mocks.NewMockapi(ctrl)
+	m.EXPECT().DescribeVpcs(gomock.Any()).Return(&ec2.DescribeVpcsOutput{Vpcs: nil}, nil)
+	c := &EC2{client: m}
+
+	_, err := c.HasVPCIPv6("vpc-a")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "vpc-a")
+}

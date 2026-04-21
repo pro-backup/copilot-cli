@@ -241,6 +241,31 @@ func (c *EC2) HasDNSSupport(vpcID string) (bool, error) {
 	return aws.BoolValue(resp.EnableDnsSupport.Value), nil
 }
 
+// HasVPCIPv6 returns true if the given VPC has at least one Ipv6CidrBlockAssociation
+// in state "associated". Associations in states associating, disassociating,
+// disassociated, failing, or failed do not count — the VPC is not yet (or no
+// longer) IPv6-ready.
+func (c *EC2) HasVPCIPv6(vpcID string) (bool, error) {
+	resp, err := c.client.DescribeVpcs(&ec2.DescribeVpcsInput{
+		VpcIds: aws.StringSlice([]string{vpcID}),
+	})
+	if err != nil {
+		return false, fmt.Errorf("describe VPC %s: %w", vpcID, err)
+	}
+	if len(resp.Vpcs) == 0 {
+		return false, fmt.Errorf("VPC %s not found", vpcID)
+	}
+	for _, assoc := range resp.Vpcs[0].Ipv6CidrBlockAssociationSet {
+		if assoc == nil || assoc.Ipv6CidrBlockState == nil {
+			continue
+		}
+		if aws.StringValue(assoc.Ipv6CidrBlockState.State) == ec2.VpcCidrBlockStateCodeAssociated {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // VPCSubnets are all subnets within a VPC.
 type VPCSubnets struct {
 	Public  []Subnet
