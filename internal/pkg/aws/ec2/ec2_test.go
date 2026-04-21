@@ -1011,3 +1011,67 @@ func TestEC2_HasDNSSupport(t *testing.T) {
 		})
 	}
 }
+
+func TestEC2_ListVPCSubnets_PopulatesIPv6CIDRBlocks(t *testing.T) {
+	const vpcID = "vpc-abc"
+	mockRouteTables := &ec2.DescribeRouteTablesOutput{
+		RouteTables: []*ec2.RouteTable{
+			{
+				RouteTableId: aws.String("rtb-pub"),
+				Associations: []*ec2.RouteTableAssociation{{SubnetId: aws.String("subnet-pub")}},
+				Routes: []*ec2.Route{{
+					DestinationCidrBlock: aws.String("0.0.0.0/0"),
+					GatewayId:            aws.String("igw-1"),
+				}},
+				VpcId: aws.String(vpcID),
+			},
+			{
+				RouteTableId: aws.String("rtb-main"),
+				Associations: []*ec2.RouteTableAssociation{{Main: aws.Bool(true)}},
+				Routes:       []*ec2.Route{},
+				VpcId:        aws.String(vpcID),
+			},
+		},
+	}
+	mockSubnets := &ec2.DescribeSubnetsOutput{Subnets: []*ec2.Subnet{
+		{
+			SubnetId:  aws.String("subnet-pub"),
+			CidrBlock: aws.String("10.0.0.0/24"),
+			Ipv6CidrBlockAssociationSet: []*ec2.SubnetIpv6CidrBlockAssociation{
+				{
+					Ipv6CidrBlock:      aws.String("2001:db8::/64"),
+					Ipv6CidrBlockState: &ec2.SubnetCidrBlockState{State: aws.String("associated")},
+				},
+				{
+					Ipv6CidrBlock:      aws.String("2001:db8:1::/64"),
+					Ipv6CidrBlockState: &ec2.SubnetCidrBlockState{State: aws.String("disassociated")},
+				},
+			},
+		},
+		{
+			SubnetId:  aws.String("subnet-priv"),
+			CidrBlock: aws.String("10.0.1.0/24"),
+			// No IPv6 association set at all.
+		},
+	}}
+	ctrl := gomock.NewController(t)
+	m := mocks.NewMockapi(ctrl)
+	m.EXPECT().DescribeRouteTables(gomock.Any()).Return(mockRouteTables, nil)
+	m.EXPECT().DescribeSubnets(gomock.Any()).Return(mockSubnets, nil)
+	client := &EC2{client: m}
+
+	out, err := client.ListVPCSubnets(vpcID)
+	require.NoError(t, err)
+
+	subnetsByID := map[string]Subnet{}
+	for _, s := range out.Public {
+		subnetsByID[s.ID] = s
+	}
+	for _, s := range out.Private {
+		subnetsByID[s.ID] = s
+	}
+	require.ElementsMatch(t, []string{"2001:db8::/64"}, subnetsByID["subnet-pub"].IPv6CIDRBlocks,
+		"only associated IPv6 blocks are returned; disassociated is filtered")
+	require.Empty(t, subnetsByID["subnet-priv"].IPv6CIDRBlocks,
+		"subnets with no IPv6 have empty slice, not nil panic")
+}

@@ -88,7 +88,8 @@ type VPC struct {
 // Subnet contains the ID and name of a subnet.
 type Subnet struct {
 	Resource
-	CIDRBlock string
+	CIDRBlock      string
+	IPv6CIDRBlocks []string
 }
 
 // AZ represents an availability zone.
@@ -277,7 +278,8 @@ func (c *EC2) ListVPCSubnets(vpcID string) (*VPCSubnets, error) {
 				ID:   aws.StringValue(subnet.SubnetId),
 				Name: name,
 			},
-			CIDRBlock: aws.StringValue(subnet.CidrBlock),
+			CIDRBlock:      aws.StringValue(subnet.CidrBlock),
+			IPv6CIDRBlocks: associatedIPv6Blocks(subnet),
 		}
 		if rtIndex.IsPublicSubnet(s.ID) {
 			publicSubnets = append(publicSubnets, s)
@@ -493,4 +495,21 @@ func (c *EC2) CloudFrontManagedPrefixListID() (string, error) {
 	}
 
 	return ids[0], nil
+}
+
+// associatedIPv6Blocks returns the Ipv6CidrBlock values whose association state
+// is "associated". Other states (associating, disassociating, disassociated,
+// failing, failed) are excluded — they do not count as IPv6-ready.
+func associatedIPv6Blocks(subnet *ec2.Subnet) []string {
+	var out []string
+	for _, assoc := range subnet.Ipv6CidrBlockAssociationSet {
+		if assoc == nil || assoc.Ipv6CidrBlockState == nil {
+			continue
+		}
+		if aws.StringValue(assoc.Ipv6CidrBlockState.State) != ec2.SubnetCidrBlockStateCodeAssociated {
+			continue
+		}
+		out = append(out, aws.StringValue(assoc.Ipv6CidrBlock))
+	}
+	return out
 }
