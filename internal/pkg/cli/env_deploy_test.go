@@ -25,6 +25,66 @@ type deployEnvAskMocks struct {
 	store *mocks.Mockstore
 }
 
+func TestDeployEnvOpts_validateIPv6Toggle(t *testing.T) {
+	testCases := map[string]struct {
+		manifestIPv6 bool
+		stackOutputs map[string]string
+		wantErrIs    error
+	}{
+		"both off — no-op": {
+			manifestIPv6: false,
+			stackOutputs: map[string]string{},
+			wantErrIs:    nil,
+		},
+		"both on — no-op": {
+			manifestIPv6: true,
+			stackOutputs: map[string]string{"IPv6Enabled": "true"},
+			wantErrIs:    nil,
+		},
+		"off-to-on toggle rejected": {
+			manifestIPv6: true,
+			stackOutputs: map[string]string{},
+			wantErrIs:    errIPv6ToggleOnExistingEnv,
+		},
+		"on-to-off toggle rejected": {
+			manifestIPv6: false,
+			stackOutputs: map[string]string{"IPv6Enabled": "true"},
+			wantErrIs:    errIPv6ToggleOnExistingEnv,
+		},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockDescriber := mocks.NewMockenvStackOutputsGetter(ctrl)
+			mockDescriber.EXPECT().Outputs().Return(tc.stackOutputs, nil)
+
+			rawMft := "name: test\ntype: Environment\n"
+			if tc.manifestIPv6 {
+				rawMft += "network:\n  vpc:\n    ipv6:\n      enabled: true\n"
+			}
+			mft, err := manifest.UnmarshalEnvironment([]byte(rawMft))
+			require.NoError(t, err)
+
+			opts := &deployEnvOpts{
+				deployEnvVars: deployEnvVars{appName: "demo", name: "test"},
+				mft:           mft,
+				newEnvDescriber: func(_, _ string) (envStackOutputsGetter, error) {
+					return mockDescriber, nil
+				},
+			}
+
+			err = opts.validateIPv6Toggle()
+			if tc.wantErrIs == nil {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, tc.wantErrIs)
+			}
+		})
+	}
+}
+
 func TestDeployEnvOpts_Ask(t *testing.T) {
 	testCases := map[string]struct {
 		inAppName  string

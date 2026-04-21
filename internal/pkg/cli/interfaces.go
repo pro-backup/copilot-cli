@@ -759,3 +759,10 @@ type secretGetter interface {
 type dockerWorkload interface {
 	Dockerfile() string
 }
+
+// envStackOutputsGetter fetches the CloudFormation outputs of a deployed
+// environment stack. Kept minimal so we can inject a test double without
+// standing up a real CloudFormation describer.
+type envStackOutputsGetter interface {
+	Outputs() (map[string]string, error)
+}

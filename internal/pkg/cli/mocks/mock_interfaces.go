@@ -8282,3 +8282,41 @@ func (mr *MockdockerWorkloadMockRecorder) Dockerfile() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dockerfile", reflect.TypeOf((*MockdockerWorkload)(nil).Dockerfile))
 }
+
+// MockenvStackOutputsGetter is a mock of envStackOutputsGetter interface.
+type MockenvStackOutputsGetter struct {
+	ctrl     *gomock.Controller
+	recorder *MockenvStackOutputsGetterMockRecorder
+}
+
+// MockenvStackOutputsGetterMockRecorder is the mock recorder for MockenvStackOutputsGetter.
+type MockenvStackOutputsGetterMockRecorder struct {
+	mock *MockenvStackOutputsGetter
+}
+
+// NewMockenvStackOutputsGetter creates a new mock instance.
+func NewMockenvStackOutputsGetter(ctrl *gomock.Controller) *MockenvStackOutputsGetter {
+	mock := &MockenvStackOutputsGetter{ctrl: ctrl}
+	mock.recorder = &MockenvStackOutputsGetterMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockenvStackOutputsGetter) EXPECT() *MockenvStackOutputsGetterMockRecorder {
+	return m.recorder
+}
+
+// Outputs mocks base method.
+func (m *MockenvStackOutputsGetter) Outputs() (map[string]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Outputs")
+	ret0, _ := ret[0].(map[string]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Outputs indicates an expected call of Outputs.
+func (mr *MockenvStackOutputsGetterMockRecorder) Outputs() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Outputs", reflect.TypeOf((*MockenvStackOutputsGetter)(nil).Outputs))
+}
