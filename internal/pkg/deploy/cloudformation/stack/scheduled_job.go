@@ -189,7 +189,7 @@ func (j *ScheduledJob) Template() (string, error) {
 		LogConfig:                convertLogging(j.manifest.Logging),
 		DockerLabels:             j.manifest.ImageConfig.Image.DockerLabels,
 		Storage:                  convertStorageOpts(j.manifest.Name, j.manifest.Storage),
-		Network:                  convertNetworkConfig(j.manifest.Network),
+		Network:                  convertNetworkConfig(j.manifest.Network, false),
 		EntryPoint:               entrypoint,
 		Command:                  command,
 		DependsOn:                convertDependsOn(j.manifest.ImageConfig.Image.DependsOn),

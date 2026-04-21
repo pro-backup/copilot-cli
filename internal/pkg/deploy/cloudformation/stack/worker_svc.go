@@ -150,7 +150,7 @@ func (s *WorkerService) Template() (string, error) {
 		DockerLabels:             s.manifest.ImageConfig.Image.DockerLabels,
 		CustomResources:          crs,
 		Storage:                  convertStorageOpts(s.manifest.Name, s.manifest.Storage),
-		Network:                  convertNetworkConfig(s.manifest.Network),
+		Network:                  convertNetworkConfig(s.manifest.Network, false),
 		DeploymentConfiguration:  convertWorkerDeploymentConfig(s.manifest.WorkerServiceConfig.DeployConfig),
 		EntryPoint:               entrypoint,
 		ServiceConnectOpts:       scOpts,

@@ -189,7 +189,7 @@ func (s *BackendService) Template() (string, error) {
 		ExecuteCommand:          convertExecuteCommand(&s.manifest.ExecuteCommand),
 		LogConfig:               convertLogging(s.manifest.Logging),
 		NestedStack:             addonsOutputs,
-		Network:                 convertNetworkConfig(s.manifest.Network),
+		Network:                 convertNetworkConfig(s.manifest.Network, false),
 		Publish:                 publishers,
 		PermissionsBoundary:     s.permBound,
 		Platform:                convertPlatform(s.manifest.Platform),
