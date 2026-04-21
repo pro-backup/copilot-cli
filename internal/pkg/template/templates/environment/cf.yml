@@ -130,11 +130,19 @@ Resources:
           ToPort: 80
         {{- end}}
         {{- range $cidr := .PublicHTTPConfig.PublicALBSourceIPs }}
+        {{- if isIPv6CIDR $cidr }}
+        - CidrIpv6: {{$cidr}}
+          Description: Allow ingress from source IPv6 {{$cidr}} on port 80
+          FromPort: 80
+          IpProtocol: tcp
+          ToPort: 80
+        {{- else }}
         - CidrIp: {{$cidr}}
           Description: Allow ingress from source IP {{$cidr}} on port 80
           FromPort: 80
           IpProtocol: tcp
           ToPort: 80
+        {{- end }}
         {{- end }}
         {{- else}}
         - CidrIp: 0.0.0.0/0
@@ -168,11 +176,19 @@ Resources:
           ToPort: 443
         {{- end}}
         {{- range $cidr := .PublicHTTPConfig.PublicALBSourceIPs }}
+        {{- if isIPv6CIDR $cidr }}
+        - CidrIpv6: {{$cidr}}
+          Description: Allow ingress from source IPv6 {{$cidr}} on port 443
+          FromPort: 443
+          IpProtocol: tcp
+          ToPort: 443
+        {{- else }}
         - CidrIp: {{$cidr}}
           Description: Allow ingress from source IP {{$cidr}} on port 443
           FromPort: 443
           IpProtocol: tcp
           ToPort: 443
+        {{- end }}
         {{- end }}
         {{- else}}
         - CidrIp: 0.0.0.0/0
