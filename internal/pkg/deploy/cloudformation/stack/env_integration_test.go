@@ -290,6 +290,41 @@ network:
 			}(),
 			wantedFileName: "template-with-ipv6-enabled.yml",
 		},
+		"ipv6 with custom ingress and internal alb vpc ingress": {
+			input: func() *stack.EnvConfig {
+				rawMft := `name: test
+type: Environment
+http:
+  public:
+    certificates:
+      - cert-1
+  private:
+    security_groups:
+      ingress:
+        from_vpc: true
+    certificates:
+      - cert-2
+network:
+  vpc:
+    ipv6:
+      enabled: true
+`
+				var mft manifest.Environment
+				err := yaml.Unmarshal([]byte(rawMft), &mft)
+				require.NoError(t, err)
+				return &stack.EnvConfig{
+					Version:              "1.x",
+					App:                  deploy.AppInformation{AccountPrincipalARN: "arn:aws:iam::000000000:root", Name: "demo"},
+					Name:                 "test",
+					PublicALBSourceIPs:   []string{"1.1.1.1/32", "2001:db8::/32"},
+					ArtifactBucketARN:    "arn:aws:s3:::mockbucket",
+					ArtifactBucketKeyARN: "arn:aws:kms:us-west-2:000000000:key/1234abcd-12ab-34cd-56ef-1234567890ab",
+					Mft:                  &mft,
+					RawMft:               rawMft,
+				}
+			}(),
+			wantedFileName: "template-with-ipv6-and-custom-ingress.yml",
+		},
 	}
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
