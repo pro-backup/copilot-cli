@@ -1065,3 +1065,28 @@ func TestLoadBalancedWebService_envIPv6EnabledPropagatesToNetworkOpts(t *testing
 	require.NoError(t, err)
 	require.True(t, got.envIPv6Enabled, "LoadBalancedWebService.envIPv6Enabled must be set from envManifest.Network.VPC.IPv6Enabled()")
 }
+
+func TestLoadBalancedWebService_Template_IPv6Enabled_RendersAssignIpv6Address(t *testing.T) {
+	conf := LoadBalancedWebServiceConfig{
+		App:                &config.Application{Name: "mockApp"},
+		EnvManifest:        mustEnvManifestWithIPv6(t, true),
+		ArtifactBucketName: "mockBucket",
+		Manifest: manifest.NewLoadBalancedWebService(&manifest.LoadBalancedWebServiceProps{
+			WorkloadProps: &manifest.WorkloadProps{
+				Name:       "frontend",
+				Dockerfile: testDockerfile,
+			},
+			Port: 80,
+		}),
+		RuntimeConfig: RuntimeConfig{
+			Version:   "v1.29.0",
+			Region:    "us-west-2",
+			AccountID: "123456789012",
+		},
+	}
+	stk, err := NewLoadBalancedWebService(conf)
+	require.NoError(t, err)
+	tpl, err := stk.Template()
+	require.NoError(t, err)
+	require.Contains(t, tpl, "AssignIpv6Address: ENABLED")
+}
