@@ -268,6 +268,47 @@ func TestRuntimePlatformOpts_IsDefault(t *testing.T) {
 	}
 }
 
+func TestRuntimePlatformOpts_IsWindows(t *testing.T) {
+	testCases := map[string]struct {
+		in     RuntimePlatformOpts
+		wanted bool
+	}{
+		"empty platform is not Windows": {
+			in:     RuntimePlatformOpts{},
+			wanted: false,
+		},
+		"linux/amd64 is not Windows": {
+			in:     RuntimePlatformOpts{OS: OSLinux, Arch: ArchX86},
+			wanted: false,
+		},
+		"linux/arm64 is not Windows": {
+			in:     RuntimePlatformOpts{OS: OSLinux, Arch: ArchARM64},
+			wanted: false,
+		},
+		"windows_server_2019_full is Windows": {
+			in:     RuntimePlatformOpts{OS: OSWindowsServer2019Full, Arch: ArchX86},
+			wanted: true,
+		},
+		"windows_server_2019_core is Windows": {
+			in:     RuntimePlatformOpts{OS: OSWindowsServer2019Core, Arch: ArchX86},
+			wanted: true,
+		},
+		"windows_server_2022_full is Windows": {
+			in:     RuntimePlatformOpts{OS: OSWindowsServer2022Full, Arch: ArchX86},
+			wanted: true,
+		},
+		"windows_server_2022_core is Windows": {
+			in:     RuntimePlatformOpts{OS: OSWindowsServer2022Core, Arch: ArchX86},
+			wanted: true,
+		},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			require.Equal(t, tc.wanted, tc.in.IsWindows())
+		})
+	}
+}
+
 func TestPlainSSMOrSecretARN_RequiresSub(t *testing.T) {
 	require.False(t, plainSSMOrSecretARN{}.RequiresSub(), "plain SSM Parameter Store or secret ARNs do not require !Sub")
 }
@@ -552,4 +593,12 @@ func Test_truncateWithHashPadding(t *testing.T) {
 			require.Equal(t, tc.expected, truncateWithHashPadding(tc.inString, tc.inMax, tc.inPadding))
 		})
 	}
+}
+
+func TestNetworkOpts_IPv6Enabled_Field(t *testing.T) {
+	opts := NetworkOpts{IPv6Enabled: true}
+	require.True(t, opts.IPv6Enabled, "NetworkOpts.IPv6Enabled must be a settable bool field")
+
+	zero := NetworkOpts{}
+	require.False(t, zero.IPv6Enabled, "zero-value NetworkOpts.IPv6Enabled must be false")
 }

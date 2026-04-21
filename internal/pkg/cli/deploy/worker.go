@@ -182,6 +182,7 @@ func (d *workerSvcDeployer) stackConfiguration(in *StackRuntimeConfiguration) (*
 	default:
 		conf, err = stack.NewWorkerService(stack.WorkerServiceConfig{
 			App:                d.app,
+			EnvManifest:        d.envConfig,
 			Env:                d.env.Name,
 			Manifest:           d.wsMft,
 			RawManifest:        d.rawMft,

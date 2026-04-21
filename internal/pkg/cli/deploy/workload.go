@@ -302,6 +302,7 @@ func newWorkloadDeployer(in *WorkloadDeployerInput) (*workloadDeployer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unmarshal the manifest used to deploy environment %s: %w", in.Env.Name, err)
 	}
+	warnIfWindowsInIPv6Env(in.Name, envConfig, workloadIsWindows(in.Mft))
 
 	cfn := cloudformation.New(envSession, cloudformation.WithProgressTracker(os.Stderr))
 
@@ -339,6 +340,33 @@ func newWorkloadDeployer(in *WorkloadDeployerInput) (*workloadDeployer, error) {
 		mft:    in.Mft,
 		rawMft: in.RawMft,
 	}, nil
+}
+
+// warnIfWindowsInIPv6Env emits a single yellow "Note:" warning to stderr
+// when a Windows workload is being deployed into a dual-stack env.
+// Windows Fargate does not support IPv6 task networking; the deploy
+// proceeds without AssignIpv6Address on the task.
+func warnIfWindowsInIPv6Env(name string, envMft *manifest.Environment, isWindows bool) {
+	if envMft == nil || !envMft.Network.VPC.IPv6Enabled() {
+		return
+	}
+	if !isWindows {
+		return
+	}
+	log.Warningf("IPv6 is not enabled for %s: Windows Fargate does not support IPv6 task networking.\n", name)
+}
+
+// workloadIsWindows returns true when the applied workload manifest's
+// platform OS is one of the supported Windows Server families.
+func workloadIsWindows(mft interface{}) bool {
+	type platformGetter interface {
+		IsWindows() bool
+	}
+	p, ok := mft.(platformGetter)
+	if !ok {
+		return false
+	}
+	return p.IsWindows()
 }
 
 // DeployDiff returns the stringified diff of the template against the deployed template of the workload.

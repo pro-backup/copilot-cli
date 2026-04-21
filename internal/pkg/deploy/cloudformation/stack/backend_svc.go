@@ -22,10 +22,11 @@ import (
 // BackendService represents the configuration needed to create a CloudFormation stack from a backend service manifest.
 type BackendService struct {
 	*ecsWkld
-	manifest     *manifest.BackendService
-	httpsEnabled bool
-	albEnabled   bool
-	importedALB  *elbv2.LoadBalancer
+	manifest       *manifest.BackendService
+	httpsEnabled   bool
+	albEnabled     bool
+	envIPv6Enabled bool
+	importedALB    *elbv2.LoadBalancer
 
 	parser backendSvcReadParser
 }
@@ -80,9 +81,10 @@ func NewBackendService(conf BackendServiceConfig, opts ...BackendServiceOption) 
 			tc:                  conf.Manifest.TaskConfig,
 			taskDefOverrideFunc: override.CloudFormationTemplate,
 		},
-		manifest:   conf.Manifest,
-		parser:     fs,
-		albEnabled: !conf.Manifest.HTTP.IsEmpty(),
+		manifest:       conf.Manifest,
+		parser:         fs,
+		albEnabled:     !conf.Manifest.HTTP.IsEmpty(),
+		envIPv6Enabled: conf.EnvManifest.Network.VPC.IPv6Enabled(),
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -189,7 +191,7 @@ func (s *BackendService) Template() (string, error) {
 		ExecuteCommand:          convertExecuteCommand(&s.manifest.ExecuteCommand),
 		LogConfig:               convertLogging(s.manifest.Logging),
 		NestedStack:             addonsOutputs,
-		Network:                 convertNetworkConfig(s.manifest.Network),
+		Network:                 convertNetworkConfig(s.manifest.Network, s.envIPv6Enabled),
 		Publish:                 publishers,
 		PermissionsBoundary:     s.permBound,
 		Platform:                convertPlatform(s.manifest.Platform),

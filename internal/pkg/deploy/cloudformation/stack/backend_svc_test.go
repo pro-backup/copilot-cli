@@ -694,3 +694,46 @@ func TestBackendService_Parameters(t *testing.T) {
 		},
 	}, params)
 }
+
+func TestBackendService_envIPv6EnabledPropagatesToNetworkOpts(t *testing.T) {
+	conf := BackendServiceConfig{
+		App:         &config.Application{Name: "mockApp"},
+		EnvManifest: mustEnvManifestWithIPv6(t, true),
+		Manifest: manifest.NewBackendService(manifest.BackendServiceProps{
+			WorkloadProps: manifest.WorkloadProps{
+				Name:       "api",
+				Dockerfile: testDockerfile,
+			},
+			Port: 8080,
+		}),
+		RuntimeConfig: RuntimeConfig{Version: "v1.29.0"},
+	}
+	got, err := NewBackendService(conf)
+	require.NoError(t, err)
+	require.True(t, got.envIPv6Enabled, "BackendService.envIPv6Enabled must be set from envManifest.Network.VPC.IPv6Enabled()")
+}
+
+func TestBackendService_Template_IPv6Enabled_RendersAssignIpv6Address(t *testing.T) {
+	conf := BackendServiceConfig{
+		App:                &config.Application{Name: "mockApp"},
+		EnvManifest:        mustEnvManifestWithIPv6(t, true),
+		ArtifactBucketName: "mockBucket",
+		Manifest: manifest.NewBackendService(manifest.BackendServiceProps{
+			WorkloadProps: manifest.WorkloadProps{
+				Name:       "api",
+				Dockerfile: testDockerfile,
+			},
+			Port: 8080,
+		}),
+		RuntimeConfig: RuntimeConfig{
+			Version:   "v1.29.0",
+			Region:    "us-west-2",
+			AccountID: "123456789012",
+		},
+	}
+	stk, err := NewBackendService(conf)
+	require.NoError(t, err)
+	tpl, err := stk.Template()
+	require.NoError(t, err)
+	require.Contains(t, tpl, "AssignIpv6Address: ENABLED")
+}

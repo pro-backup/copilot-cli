@@ -1542,3 +1542,48 @@ func TestWorkloadDeployer_DeployDiff(t *testing.T) {
 		})
 	}
 }
+
+func TestWarnIfWindowsInIPv6Env(t *testing.T) {
+	envIPv6YAML := []byte(`name: test
+type: Environment
+network:
+  vpc:
+    ipv6:
+      enabled: true
+`)
+	envV4YAML := []byte(`name: test
+type: Environment
+`)
+	envIPv6, err := manifest.UnmarshalEnvironment(envIPv6YAML)
+	require.NoError(t, err)
+	envV4, err := manifest.UnmarshalEnvironment(envV4YAML)
+	require.NoError(t, err)
+
+	testCases := map[string]struct {
+		env       *manifest.Environment
+		isWindows bool
+		wantWarn  bool
+	}{
+		"linux in ipv6 env → no warning": {env: envIPv6, isWindows: false, wantWarn: false},
+		"windows in ipv6 env → warning":  {env: envIPv6, isWindows: true, wantWarn: true},
+		"windows in v4 env → no warning": {env: envV4, isWindows: true, wantWarn: false},
+		"linux in v4 env → no warning":   {env: envV4, isWindows: false, wantWarn: false},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			var buf bytes.Buffer
+			old := log.DiagnosticWriter
+			log.DiagnosticWriter = &buf
+			defer func() { log.DiagnosticWriter = old }()
+
+			warnIfWindowsInIPv6Env("myservice", tc.env, tc.isWindows)
+
+			if tc.wantWarn {
+				require.Contains(t, buf.String(), "IPv6 is not enabled for myservice")
+				require.Contains(t, buf.String(), "Windows Fargate")
+			} else {
+				require.Empty(t, buf.String())
+			}
+		})
+	}
+}

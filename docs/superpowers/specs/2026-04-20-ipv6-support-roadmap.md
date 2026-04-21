@@ -39,9 +39,12 @@ Adds opt-in `network.vpc.ipv6.enabled` on the env manifest. When on, the env Clo
 - **Error sentinels**: `errIPv6WithImportedVPC` (`manifest` package); `errIPv6ToggleOnExistingEnv` (`cli` package).
 - **Env stack golden fixture**: `internal/pkg/deploy/cloudformation/stack/testdata/environments/template-with-ipv6-enabled.yml`.
 
-### #2 Workload-side IPv6 egress — NOT STARTED
+### #2 Workload-side IPv6 egress — READY TO MERGE
 
 **Depends on**: #1.
+**Branch**: `feature/ipv6-task-egress` (off `feature/ipv6-support`)
+**Spec**: `docs/superpowers/specs/2026-04-21-workload-ipv6-egress-design.md`
+**Plan**: `docs/superpowers/plans/2026-04-21-workload-ipv6-egress.md`
 
 **Goal**: Fargate tasks in a dual-stack env get IPv6 addresses and can reach the IPv6 internet via the EgressOnlyIGW.
 
@@ -122,7 +125,7 @@ The brainstorming skill will then walk through clarifying questions specific to 
 | # | Sub-project | Status | Spec | Plan | Merged |
 |---|---|---|---|---|---|
 | 1 | Env dual-stack VPC | ✅ DONE | ✅ | ✅ | `a8a9ee7b` |
-| 2 | Workload IPv6 egress | ⏳ NOT STARTED | — | — | — |
+| 2 | Workload IPv6 egress | ✅ READY TO MERGE | ✅ | ✅ | — |
 | 3 | Dual-stack LB ingress | ⏳ NOT STARTED | — | — | — |
 | 4 | Imported-VPC IPv6 | ⏳ NOT STARTED | — | — | — |
 | 5 | Upgrade/v6-only/NAT-removal | ⏳ NOT STARTED | — | — | — |

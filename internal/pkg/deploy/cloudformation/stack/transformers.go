@@ -1054,16 +1054,18 @@ func convertFileSystemID(in manifest.EFSVolumeConfiguration) template.FileSystem
 	return template.ImportedFileSystemID(aws.StringValue(in.FileSystemID.FromCFN.Name))
 }
 
-func convertNetworkConfig(network manifest.NetworkConfig) template.NetworkOpts {
+func convertNetworkConfig(network manifest.NetworkConfig, ipv6Enabled bool) template.NetworkOpts {
 	if network.IsEmpty() {
 		return template.NetworkOpts{
 			AssignPublicIP: template.EnablePublicIP,
 			SubnetsType:    template.PublicSubnetsPlacement,
+			IPv6Enabled:    ipv6Enabled,
 		}
 	}
 	opts := template.NetworkOpts{
 		AssignPublicIP: template.EnablePublicIP,
 		SubnetsType:    template.PublicSubnetsPlacement,
+		IPv6Enabled:    ipv6Enabled,
 	}
 	inSGs := network.VPC.SecurityGroups.GetIDs()
 	outSGs := make([]template.SecurityGroup, len(inSGs))

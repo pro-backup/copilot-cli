@@ -707,6 +707,10 @@ type NetworkOpts struct {
 	SubnetsType              string
 	SubnetIDs                []string
 	DenyDefaultSecurityGroup bool
+	// IPv6Enabled controls whether the rendered AwsvpcConfiguration sets
+	// AssignIpv6Address: ENABLED. It is derived from the env manifest's
+	// network.vpc.ipv6.enabled field at stack-construction time.
+	IPv6Enabled bool
 }
 
 // SecurityGroup represents the ID of an additional security group associated with the tasks.
@@ -771,6 +775,17 @@ func (p RuntimePlatformOpts) Version() string {
 		}
 	}
 	return "LATEST"
+}
+
+// IsWindows returns true if the platform's OS family is one of the
+// supported Windows Server variants.
+func (p RuntimePlatformOpts) IsWindows() bool {
+	for _, os := range osFamiliesForPV100 {
+		if p.OS == os {
+			return true
+		}
+	}
+	return false
 }
 
 func (p RuntimePlatformOpts) isEmpty() bool {

@@ -22,6 +22,9 @@
           "AwsvpcConfiguration": {
             "Subnets": ["${Subnets}"],
             "AssignPublicIp": "${AssignPublicIp}",
+            {{- if and .Network.IPv6Enabled (not .Platform.IsWindows) }}
+            "AssignIpv6Address": "${AssignIpv6Address}",
+            {{- end }}
             "SecurityGroups": ["${SecurityGroups}"]
           }
         }

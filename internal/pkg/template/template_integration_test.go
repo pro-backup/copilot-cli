@@ -6,6 +6,7 @@
 package template_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -531,9 +532,12 @@ func TestTemplate_ParseNetwork(t *testing.T) {
 	}
 
 	testCases := map[string]struct {
-		input template.NetworkOpts
+		input    template.NetworkOpts
+		platform template.RuntimePlatformOpts
 
-		wantedNetworkConfig string
+		wantedNetworkConfig    string
+		wantedSubstring        string
+		wantedNotSubstring     string
 	}{
 		"should render AWS VPC configuration for private subnets": {
 			input: template.NetworkOpts{
@@ -597,27 +601,67 @@ func TestTemplate_ParseNetwork(t *testing.T) {
      - "sg-asdasdas"
 `,
 		},
+		"IPv6 enabled, Linux workload: AssignIpv6Address is rendered": {
+			input: template.NetworkOpts{
+				AssignPublicIP: template.EnablePublicIP,
+				SubnetsType:    template.PublicSubnetsPlacement,
+				IPv6Enabled:    true,
+			},
+			platform:        template.RuntimePlatformOpts{OS: template.OSLinux, Arch: template.ArchX86},
+			wantedSubstring: "AssignIpv6Address: ENABLED",
+		},
+		"IPv6 enabled, Windows workload: AssignIpv6Address is NOT rendered": {
+			input: template.NetworkOpts{
+				AssignPublicIP: template.EnablePublicIP,
+				SubnetsType:    template.PublicSubnetsPlacement,
+				IPv6Enabled:    true,
+			},
+			platform:           template.RuntimePlatformOpts{OS: template.OSWindowsServer2019Full, Arch: template.ArchX86},
+			wantedNotSubstring: "AssignIpv6Address",
+		},
+		"IPv6 disabled: AssignIpv6Address is NOT rendered": {
+			input: template.NetworkOpts{
+				AssignPublicIP: template.EnablePublicIP,
+				SubnetsType:    template.PublicSubnetsPlacement,
+				IPv6Enabled:    false,
+			},
+			platform:           template.RuntimePlatformOpts{OS: template.OSLinux, Arch: template.ArchX86},
+			wantedNotSubstring: "AssignIpv6Address",
+		},
 	}
 
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
 			// GIVEN
 			tpl := template.New()
-			wanted := make(map[interface{}]interface{})
-			err := yaml.Unmarshal([]byte(tc.wantedNetworkConfig), &wanted)
-			require.NoError(t, err, "unmarshal wanted config")
 
 			// WHEN
 			content, err := tpl.ParseLoadBalancedWebService(template.WorkloadOpts{
-				Network: tc.input,
+				Network:  tc.input,
+				Platform: tc.platform,
 			})
 
 			// THEN
 			require.NoError(t, err, "parse load balanced web service")
-			var actual cfn
-			err = yaml.Unmarshal(content.Bytes(), &actual)
-			require.NoError(t, err, "unmarshal actual config")
-			require.Equal(t, wanted, actual.Resources.Service.Properties.NetworkConfiguration)
+			rendered := content.String()
+
+			if tc.wantedNetworkConfig != "" {
+				wanted := make(map[interface{}]interface{})
+				err = yaml.Unmarshal([]byte(tc.wantedNetworkConfig), &wanted)
+				require.NoError(t, err, "unmarshal wanted config")
+				var actual cfn
+				err = yaml.Unmarshal(content.Bytes(), &actual)
+				require.NoError(t, err, "unmarshal actual config")
+				require.Equal(t, wanted, actual.Resources.Service.Properties.NetworkConfiguration)
+			}
+			if tc.wantedSubstring != "" {
+				require.True(t, strings.Contains(rendered, tc.wantedSubstring),
+					"expected rendered template to contain %q", tc.wantedSubstring)
+			}
+			if tc.wantedNotSubstring != "" {
+				require.False(t, strings.Contains(rendered, tc.wantedNotSubstring),
+					"expected rendered template to NOT contain %q", tc.wantedNotSubstring)
+			}
 		})
 	}
 }
