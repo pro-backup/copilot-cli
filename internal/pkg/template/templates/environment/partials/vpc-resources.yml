@@ -1,3 +1,6 @@
+# NOTE: This partial is included with the root template context (.) so that
+# IPv6 guards can read .VPCConfig.IPv6Enabled. Managed-VPC fields are
+# therefore accessed as .VPCConfig.Managed.* throughout this file.
 VPC:
   Metadata:
     'aws:copilot:description': 'A Virtual Private Cloud to control networking of your AWS resources'
