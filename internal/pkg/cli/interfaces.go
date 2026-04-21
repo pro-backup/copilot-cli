@@ -590,6 +590,8 @@ type credsSelector interface {
 type ec2Client interface {
 	HasDNSSupport(vpcID string) (bool, error)
 	ListAZs() ([]ec2.AZ, error)
+	HasVPCIPv6(vpcID string) (bool, error)
+	SubnetsByIDs(ids []string) ([]ec2.Subnet, error)
 }
 
 type serviceResumer interface {
@@ -758,4 +760,11 @@ type secretGetter interface {
 
 type dockerWorkload interface {
 	Dockerfile() string
+}
+
+// envStackOutputsGetter fetches the CloudFormation outputs of a deployed
+// environment stack. Kept minimal so we can inject a test double without
+// standing up a real CloudFormation describer.
+type envStackOutputsGetter interface {
+	Outputs() (map[string]string, error)
 }

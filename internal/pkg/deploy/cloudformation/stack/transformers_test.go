@@ -2538,3 +2538,22 @@ func Test_convertCustomResources(t *testing.T) {
 		})
 	}
 }
+
+func TestConvertNetworkConfig_IPv6Enabled(t *testing.T) {
+	mft := manifest.NetworkConfig{}
+	t.Run("ipv6Enabled=true is stamped onto NetworkOpts", func(t *testing.T) {
+		got := convertNetworkConfig(mft, true)
+		require.True(t, got.IPv6Enabled)
+	})
+	t.Run("ipv6Enabled=false leaves NetworkOpts.IPv6Enabled false", func(t *testing.T) {
+		got := convertNetworkConfig(mft, false)
+		require.False(t, got.IPv6Enabled)
+	})
+	t.Run("empty NetworkConfig with ipv6Enabled=true still sets IPv6Enabled", func(t *testing.T) {
+		got := convertNetworkConfig(manifest.NetworkConfig{}, true)
+		require.True(t, got.IPv6Enabled)
+		// The empty-config branch also sets defaults — those are unchanged.
+		require.Equal(t, template.EnablePublicIP, got.AssignPublicIP)
+		require.Equal(t, template.PublicSubnetsPlacement, got.SubnetsType)
+	})
+}

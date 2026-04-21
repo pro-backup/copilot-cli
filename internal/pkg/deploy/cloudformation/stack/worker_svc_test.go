@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/aws/copilot-cli/internal/pkg/addon"
+	"github.com/aws/copilot-cli/internal/pkg/config"
 	"github.com/aws/copilot-cli/internal/pkg/manifest/manifestinfo"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -330,4 +331,47 @@ func TestWorkerService_Parameters(t *testing.T) {
 			ParameterValue: aws.String(""),
 		},
 	}, params)
+}
+
+func TestWorkerService_envIPv6EnabledPropagatesToNetworkOpts(t *testing.T) {
+	conf := WorkerServiceConfig{
+		App:         &config.Application{Name: "mockApp"},
+		EnvManifest: mustEnvManifestWithIPv6(t, true),
+		Env:         "test",
+		Manifest: manifest.NewWorkerService(manifest.WorkerServiceProps{
+			WorkloadProps: manifest.WorkloadProps{
+				Name:       testServiceName,
+				Dockerfile: testDockerfile,
+			},
+		}),
+		RuntimeConfig: RuntimeConfig{Version: "v1.29.0"},
+	}
+	got, err := NewWorkerService(conf)
+	require.NoError(t, err)
+	require.True(t, got.envIPv6Enabled, "WorkerService.envIPv6Enabled must be set from envManifest.Network.VPC.IPv6Enabled()")
+}
+
+func TestWorkerService_Template_IPv6Enabled_RendersAssignIpv6Address(t *testing.T) {
+	conf := WorkerServiceConfig{
+		App:                &config.Application{Name: "mockApp"},
+		EnvManifest:        mustEnvManifestWithIPv6(t, true),
+		Env:                "test",
+		ArtifactBucketName: "mockBucket",
+		Manifest: manifest.NewWorkerService(manifest.WorkerServiceProps{
+			WorkloadProps: manifest.WorkloadProps{
+				Name:       testServiceName,
+				Dockerfile: testDockerfile,
+			},
+		}),
+		RuntimeConfig: RuntimeConfig{
+			Version:   "v1.29.0",
+			Region:    "us-west-2",
+			AccountID: "123456789012",
+		},
+	}
+	stk, err := NewWorkerService(conf)
+	require.NoError(t, err)
+	tpl, err := stk.Template()
+	require.NoError(t, err)
+	require.Contains(t, tpl, "AssignIpv6Address: ENABLED")
 }

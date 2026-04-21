@@ -1,4 +1,7 @@
-{{- range $ind, $cidr := .PrivateSubnetCIDRs}}
+# NOTE: This partial is included with the root template context (.) so that
+# IPv6 guards can read .VPCConfig.IPv6Enabled. Managed-VPC fields are
+# therefore accessed as .VPCConfig.Managed.* throughout this file.
+{{- range $ind, $cidr := .VPCConfig.Managed.PrivateSubnetCIDRs}}
 NatGateway{{inc $ind}}Attachment:
   Metadata:
     'aws:copilot:description': 'An Elastic IP for NAT Gateway {{inc $ind}}'
@@ -20,7 +23,11 @@ NatGateway{{inc $ind}}:
         Value: !Sub 'copilot-${AppName}-${EnvironmentName}-{{$ind}}'
 PrivateRouteTable{{inc $ind}}:
   Type: AWS::EC2::RouteTable
+  {{- if $.VPCConfig.IPv6Enabled }}
+  Condition: CreatePrivateRouteTables
+  {{- else }}
   Condition: CreateNATGateways
+  {{- end }}
   Properties:
     VpcId: !Ref 'VPC'
 PrivateRoute{{inc $ind}}:
@@ -32,8 +39,20 @@ PrivateRoute{{inc $ind}}:
     NatGatewayId: !Ref NatGateway{{inc $ind}}
 PrivateRouteTable{{inc $ind}}Association:
   Type: AWS::EC2::SubnetRouteTableAssociation
+  {{- if $.VPCConfig.IPv6Enabled }}
+  Condition: CreatePrivateRouteTables
+  {{- else }}
   Condition: CreateNATGateways
+  {{- end }}
   Properties:
     RouteTableId: !Ref PrivateRouteTable{{inc $ind}}
     SubnetId: !Ref PrivateSubnet{{inc $ind}}
+  {{- if $.VPCConfig.IPv6Enabled }}
+PrivateRouteIPv6{{inc $ind}}:
+  Type: AWS::EC2::Route
+  Properties:
+    RouteTableId: !Ref PrivateRouteTable{{inc $ind}}
+    DestinationIpv6CidrBlock: ::/0
+    EgressOnlyInternetGatewayId: !Ref EgressOnlyInternetGateway
+  {{- end }}
   {{- end}}

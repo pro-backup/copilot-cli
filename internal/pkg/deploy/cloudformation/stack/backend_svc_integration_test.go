@@ -33,6 +33,7 @@ func TestBackendService_TemplateAndParamsGeneration(t *testing.T) {
 		TemplatePath        string
 		ParamsPath          string
 		EnvImportedCertARNs []string
+		EnvIPv6             bool
 	}{
 		"simple": {
 			ManifestPath: filepath.Join(testDir, "simple-manifest.yml"),
@@ -65,6 +66,12 @@ func TestBackendService_TemplateAndParamsGeneration(t *testing.T) {
 			TemplatePath: filepath.Join(testDir, "http-autoscaling-template.yml"),
 			ParamsPath:   filepath.Join(testDir, "http-autoscaling-params.json"),
 		},
+		"ipv6 env": {
+			ManifestPath: filepath.Join(testDir, "ipv6-manifest.yml"),
+			TemplatePath: filepath.Join(testDir, "ipv6-template.yml"),
+			ParamsPath:   filepath.Join(testDir, "ipv6-params.json"),
+			EnvIPv6:      true,
+		},
 	}
 
 	// run tests
@@ -86,12 +93,26 @@ func TestBackendService_TemplateAndParamsGeneration(t *testing.T) {
 			require.NoError(t, dynamicMft.Validate())
 			mft := dynamicMft.Manifest()
 
-			envConfig := &manifest.Environment{
-				Workload: manifest.Workload{
-					Name: &envName,
-				},
+			var envConfig *manifest.Environment
+			if tc.EnvIPv6 {
+				rawEnv := `name: my-env
+type: Environment
+network:
+  vpc:
+    ipv6:
+      enabled: true
+`
+				parsed, err := manifest.UnmarshalEnvironment([]byte(rawEnv))
+				require.NoError(t, err)
+				envConfig = parsed
+			} else {
+				envConfig = &manifest.Environment{
+					Workload: manifest.Workload{
+						Name: &envName,
+					},
+				}
+				envConfig.HTTPConfig.Private.Certificates = tc.EnvImportedCertARNs
 			}
-			envConfig.HTTPConfig.Private.Certificates = tc.EnvImportedCertARNs
 			serializer, err := stack.NewBackendService(stack.BackendServiceConfig{
 				App: &config.Application{
 					Name: appName,

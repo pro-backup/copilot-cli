@@ -34,6 +34,7 @@ type LoadBalancedWebService struct {
 	manifest             *manifest.LoadBalancedWebService
 	httpsEnabled         bool
 	dnsDelegationEnabled bool
+	envIPv6Enabled       bool
 	importedALB          *elbv2.LoadBalancer
 	appInfo              deploy.AppInformation
 
@@ -115,6 +116,7 @@ func NewLoadBalancedWebService(conf LoadBalancedWebServiceConfig,
 		httpsEnabled:         httpsEnabled,
 		appInfo:              appInfo,
 		dnsDelegationEnabled: dnsDelegationEnabled,
+		envIPv6Enabled:       conf.EnvManifest.Network.VPC.IPv6Enabled(),
 
 		parser: fs,
 	}
@@ -225,7 +227,7 @@ func (s *LoadBalancedWebService) Template() (string, error) {
 		ExecuteCommand:          convertExecuteCommand(&s.manifest.ExecuteCommand),
 		LogConfig:               logConfig,
 		NestedStack:             addonsOutputs,
-		Network:                 convertNetworkConfig(s.manifest.Network),
+		Network:                 convertNetworkConfig(s.manifest.Network, s.envIPv6Enabled),
 		Publish:                 publishers,
 		PermissionsBoundary:     s.permBound,
 		Platform:                convertPlatform(s.manifest.Platform),
@@ -233,6 +235,7 @@ func (s *LoadBalancedWebService) Template() (string, error) {
 
 		// ALB configs.
 		ALBEnabled:  !s.manifest.HTTPOrBool.Disabled(),
+		IPv6Enabled: s.envIPv6Enabled,
 		GracePeriod: s.convertGracePeriod(),
 		ALBListener: albListenerConfig,
 		ImportedALB: importedALBConfig,

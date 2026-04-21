@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ssm"
 	awscfn "github.com/aws/copilot-cli/internal/pkg/aws/cloudformation"
+	"github.com/aws/copilot-cli/internal/pkg/aws/ec2"
 	"github.com/aws/copilot-cli/internal/pkg/aws/identity"
 	"github.com/aws/copilot-cli/internal/pkg/aws/sessions"
 	"github.com/aws/copilot-cli/internal/pkg/cli/deploy"
@@ -32,6 +33,11 @@ import (
 )
 
 const continueDeploymentPrompt = "Continue with the deployment?"
+
+var errIPv6ToggleOnExistingEnv = errors.New(
+	"IPv6 cannot be toggled on an existing environment. " +
+		"Create a new environment with IPv6 enabled, or follow the upgrade path once it lands.",
+)
 
 type deployEnvVars struct {
 	appName           string
@@ -62,10 +68,16 @@ type deployEnvOpts struct {
 	newInterpolator     func(app, env string) interpolator
 	newEnvVersionGetter func(appName, envName string) (versionGetter, error)
 	newEnvDeployer      func() (envDeployer, error)
+	newEnvDescriber     func(appName, envName string) (envStackOutputsGetter, error)
+	ec2Client           ec2Client
+	newEC2Client        func() (ec2Client, error)
 
 	// Cached variables.
 	targetApp *config.Application
 	targetEnv *config.Environment
+
+	// Parsed manifest; set during Execute.
+	mft *manifest.Environment
 
 	// Overridden in tests.
 	templateVersion string
@@ -97,6 +109,13 @@ func newEnvDeployOpts(vars deployEnvVars) (*deployEnvOpts, error) {
 				ConfigStore: store,
 			})
 		},
+		newEnvDescriber: func(appName, envName string) (envStackOutputsGetter, error) {
+			return describe.NewEnvDescriber(describe.NewEnvDescriberConfig{
+				App:         appName,
+				Env:         envName,
+				ConfigStore: store,
+			})
+		},
 		prompt: prompter,
 
 		fs:              fs,
@@ -107,6 +126,15 @@ func newEnvDeployOpts(vars deployEnvVars) (*deployEnvOpts, error) {
 	}
 	opts.newEnvDeployer = func() (envDeployer, error) {
 		return newEnvDeployer(opts, ws)
+	}
+	opts.newEC2Client = func() (ec2Client, error) {
+		// Session is loaded lazily — we only need EC2 when a deploy actually
+		// runs against an imported IPv6 VPC.
+		sess, err := sessProvider.Default()
+		if err != nil {
+			return nil, fmt.Errorf("load default session for EC2 client: %w", err)
+		}
+		return ec2.New(sess), nil
 	}
 	return opts, nil
 }
@@ -185,6 +213,13 @@ func (o *deployEnvOpts) Execute() error {
 	if err != nil {
 		return err
 	}
+	o.mft = mft
+	if err := o.validateIPv6Toggle(); err != nil {
+		return err
+	}
+	if err := o.validateIPv6Readiness(); err != nil {
+		return err
+	}
 	caller, err := o.identity.Get()
 	if err != nil {
 		return fmt.Errorf("get identity: %w", err)
@@ -261,6 +296,78 @@ After fixing the deployment, you can:
 		return &errNoInfrastructureChanges{parentErr: err}
 	}
 	return fmt.Errorf("deploy environment %s: %w", o.name, err)
+}
+
+// validateIPv6Toggle returns errIPv6ToggleOnExistingEnv when the manifest
+// requests a different IPv6 enablement state than the deployed env stack's
+// IPv6Enabled output. Stacks deployed before IPv6 support landed have no
+// such output; they are treated as IPv6Enabled=false.
+func (o *deployEnvOpts) validateIPv6Toggle() error {
+	manifestWantsIPv6 := o.mft != nil && o.mft.Network.VPC.IPv6Enabled()
+
+	if o.newEnvDescriber == nil {
+		return nil
+	}
+	describer, err := o.newEnvDescriber(o.appName, o.name)
+	if err != nil {
+		// Existing env stack not found (or factory failed) — nothing to validate.
+		return nil
+	}
+	outputs, err := describer.Outputs()
+	if err != nil {
+		return fmt.Errorf("describe existing env stack outputs: %w", err)
+	}
+	stackHasIPv6 := outputs["IPv6Enabled"] == "true"
+
+	if manifestWantsIPv6 != stackHasIPv6 {
+		return errIPv6ToggleOnExistingEnv
+	}
+	return nil
+}
+
+// validateIPv6Readiness is a pre-flight check that runs during env deploy
+// when the manifest's imported VPC opts into IPv6. It returns nil without
+// calling EC2 for managed VPCs or when IPv6 is disabled; otherwise it
+// lazily initializes the EC2 client and delegates to
+// validateImportedVPCIPv6Readiness, which surfaces
+// errImportedVPCMissingIPv6 or errImportedSubnetsMissingIPv6 on failure.
+func (o *deployEnvOpts) validateIPv6Readiness() error {
+	if o.mft == nil {
+		return nil
+	}
+	vpc := &o.mft.Network.VPC
+	if vpc.ID == nil || aws.StringValue(vpc.ID) == "" {
+		return nil // managed VPC — no imported readiness to check.
+	}
+	if !vpc.IPv6Enabled() {
+		return nil // imported VPC but IPv6 off — nothing to check.
+	}
+
+	if o.ec2Client == nil {
+		// Tests may construct deployEnvOpts without a factory; fall through
+		// as if no EC2 call is needed.
+		if o.newEC2Client == nil {
+			return nil
+		}
+		client, err := o.newEC2Client()
+		if err != nil {
+			return fmt.Errorf("initialize EC2 client for IPv6 readiness check: %w", err)
+		}
+		o.ec2Client = client
+	}
+
+	var subnetIDs []string
+	for _, s := range vpc.Subnets.Public {
+		if id := aws.StringValue(s.SubnetID); id != "" {
+			subnetIDs = append(subnetIDs, id)
+		}
+	}
+	for _, s := range vpc.Subnets.Private {
+		if id := aws.StringValue(s.SubnetID); id != "" {
+			subnetIDs = append(subnetIDs, id)
+		}
+	}
+	return validateImportedVPCIPv6Readiness(o.ec2Client, aws.StringValue(vpc.ID), subnetIDs)
 }
 
 func environmentManifest(envName string, reader wsEnvironmentReader, transformer interpolator) (*manifest.Environment, string, error) {

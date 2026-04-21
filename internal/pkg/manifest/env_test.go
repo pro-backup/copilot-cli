@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/copilot-cli/internal/pkg/template"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 func TestFromEnvConfig(t *testing.T) {
@@ -1173,4 +1174,47 @@ func TestEnvironmentConfig_ELBAccessLogs(t *testing.T) {
 			require.Equal(t, tc.wantedConfigs, elbAccessLogs)
 		})
 	}
+}
+
+func TestEnvironmentVPCConfig_IPv6Enabled(t *testing.T) {
+	testCases := map[string]struct {
+		yaml   string
+		wantOn bool
+	}{
+		"field absent": {
+			yaml:   "cidr: 10.0.0.0/16\n",
+			wantOn: false,
+		},
+		"ipv6 empty map": {
+			yaml:   "cidr: 10.0.0.0/16\nipv6: {}\n",
+			wantOn: false,
+		},
+		"ipv6.enabled false": {
+			yaml:   "cidr: 10.0.0.0/16\nipv6:\n  enabled: false\n",
+			wantOn: false,
+		},
+		"ipv6.enabled true": {
+			yaml:   "cidr: 10.0.0.0/16\nipv6:\n  enabled: true\n",
+			wantOn: true,
+		},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			var cfg environmentVPCConfig
+			require.NoError(t, yaml.Unmarshal([]byte(tc.yaml), &cfg))
+			require.Equal(t, tc.wantOn, cfg.IPv6Enabled())
+		})
+	}
+}
+
+func TestEnvironmentVPCConfig_IPv6Enabled_RoundTrip(t *testing.T) {
+	in := "cidr: 10.0.0.0/16\nipv6:\n  enabled: true\n"
+	var cfg environmentVPCConfig
+	require.NoError(t, yaml.Unmarshal([]byte(in), &cfg))
+
+	out, err := yaml.Marshal(cfg)
+	require.NoError(t, err)
+	var cfg2 environmentVPCConfig
+	require.NoError(t, yaml.Unmarshal(out, &cfg2))
+	require.True(t, cfg2.IPv6Enabled())
 }

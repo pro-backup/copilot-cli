@@ -121,9 +121,17 @@ type environmentNetworkConfig struct {
 type environmentVPCConfig struct {
 	ID                  *string                       `yaml:"id,omitempty"`
 	CIDR                *IPNet                        `yaml:"cidr,omitempty"`
+	IPv6                *ipv6VPCConfig                `yaml:"ipv6,omitempty"`
 	Subnets             subnetsConfiguration          `yaml:"subnets,omitempty"`
 	SecurityGroupConfig securityGroupConfig           `yaml:"security_group,omitempty"`
 	FlowLogs            Union[*bool, VPCFlowLogsArgs] `yaml:"flow_logs,omitempty"`
+}
+
+// ipv6VPCConfig configures IPv6 dual-stack networking on the managed VPC.
+// Only `Enabled` is honored in the foundation sub-project; reserved fields
+// (BYOIP CIDR, IPAM pool) will land in a follow-up.
+type ipv6VPCConfig struct {
+	Enabled *bool `yaml:"enabled,omitempty"`
 }
 
 type securityGroupConfig struct {
@@ -346,6 +354,16 @@ func (cfg *environmentVPCConfig) imported() bool {
 
 func (cfg *environmentVPCConfig) managedVPCCustomized() bool {
 	return aws.StringValue((*string)(cfg.CIDR)) != ""
+}
+
+// IPv6Enabled reports whether the environment manifest opts into
+// IPv6 dual-stack networking. Returns false when the field is absent,
+// the struct is empty, or `enabled` is explicitly false.
+func (cfg *environmentVPCConfig) IPv6Enabled() bool {
+	if cfg == nil || cfg.IPv6 == nil {
+		return false
+	}
+	return aws.BoolValue(cfg.IPv6.Enabled)
 }
 
 // ImportedVPC returns configurations that import VPC resources if there is any.

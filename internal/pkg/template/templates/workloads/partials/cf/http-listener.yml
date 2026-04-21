@@ -15,6 +15,16 @@ LoadBalancerInternalDNSAlias:
           - '.'
           - - !Ref WorkloadName
             - !GetAtt EnvControllerAction.InternalWorkloadsHostedZoneName
+      {{- if .IPv6Enabled }}
+      - Type: AAAA
+        AliasTarget:
+          HostedZoneId: !GetAtt EnvControllerAction.InternalLoadBalancerHostedZone
+          DNSName: !GetAtt EnvControllerAction.InternalLoadBalancerDNSName
+        Name: !Join
+          - '.'
+          - - !Ref WorkloadName
+            - !GetAtt EnvControllerAction.InternalWorkloadsHostedZoneName
+      {{- end }}
 {{- end}}
 
 HTTPRulePriorityAction:

@@ -1047,3 +1047,84 @@ func TestLoadBalancedWebService_Tags(t *testing.T) {
 		},
 	}, tags)
 }
+
+func TestLoadBalancedWebService_envIPv6EnabledPropagatesToNetworkOpts(t *testing.T) {
+	conf := LoadBalancedWebServiceConfig{
+		App:         &config.Application{Name: "mockApp"},
+		EnvManifest: mustEnvManifestWithIPv6(t, true),
+		Manifest: manifest.NewLoadBalancedWebService(&manifest.LoadBalancedWebServiceProps{
+			WorkloadProps: &manifest.WorkloadProps{
+				Name:       "frontend",
+				Dockerfile: testDockerfile,
+			},
+			Port: 80,
+		}),
+		RuntimeConfig: RuntimeConfig{Version: "v1.29.0"},
+	}
+	got, err := NewLoadBalancedWebService(conf)
+	require.NoError(t, err)
+	require.True(t, got.envIPv6Enabled, "LoadBalancedWebService.envIPv6Enabled must be set from envManifest.Network.VPC.IPv6Enabled()")
+}
+
+func TestLoadBalancedWebService_Template_IPv6Enabled_RendersAssignIpv6Address(t *testing.T) {
+	conf := LoadBalancedWebServiceConfig{
+		App:                &config.Application{Name: "mockApp"},
+		EnvManifest:        mustEnvManifestWithIPv6(t, true),
+		ArtifactBucketName: "mockBucket",
+		Manifest: manifest.NewLoadBalancedWebService(&manifest.LoadBalancedWebServiceProps{
+			WorkloadProps: &manifest.WorkloadProps{
+				Name:       "frontend",
+				Dockerfile: testDockerfile,
+			},
+			Port: 80,
+		}),
+		RuntimeConfig: RuntimeConfig{
+			Version:   "v1.29.0",
+			Region:    "us-west-2",
+			AccountID: "123456789012",
+		},
+	}
+	stk, err := NewLoadBalancedWebService(conf)
+	require.NoError(t, err)
+	tpl, err := stk.Template()
+	require.NoError(t, err)
+	require.Contains(t, tpl, "AssignIpv6Address: ENABLED")
+}
+
+// TestLoadBalancedWebService_IPv6PropagatesToListenerTemplate proves the
+// WorkloadOpts.IPv6Enabled flag reaches the listener template. INTENTIONALLY
+// FAILS until Task 11 lands the AAAA RecordSet in https-listener.yml.
+//
+// HTTPS must be activated (via a certificate on the env manifest) so alb.yml
+// includes https-listener.yml instead of http-listener.yml; otherwise the
+// LBWS renders HTTPListenerRule instead of LoadBalancerDNSAlias.
+func TestLoadBalancedWebService_IPv6PropagatesToListenerTemplate(t *testing.T) {
+	envMft := mustEnvManifestWithIPv6(t, true)
+	envMft.HTTPConfig.Public.Certificates = []string{"mockCertARN"}
+	conf := LoadBalancedWebServiceConfig{
+		App:                &config.Application{Name: "mockApp"},
+		EnvManifest:        envMft,
+		ArtifactBucketName: "mockBucket",
+		Manifest: manifest.NewLoadBalancedWebService(&manifest.LoadBalancedWebServiceProps{
+			WorkloadProps: &manifest.WorkloadProps{
+				Name:       "frontend",
+				Dockerfile: testDockerfile,
+			},
+			Path: "/",
+			Port: 8080,
+		}),
+		RuntimeConfig: RuntimeConfig{
+			Version:   "v1.29.0",
+			Region:    "us-west-2",
+			AccountID: "123456789012",
+		},
+	}
+	stk, err := NewLoadBalancedWebService(conf)
+	require.NoError(t, err)
+	tpl, err := stk.Template()
+	require.NoError(t, err)
+	require.Contains(t, tpl, "LoadBalancerDNSAlias",
+		"test setup bug: LBWS must have HTTPS on to include https-listener.yml")
+	require.Contains(t, tpl, "Type: AAAA",
+		"LBWS in IPv6 env must emit AAAA alias records (lands in Task 11)")
+}

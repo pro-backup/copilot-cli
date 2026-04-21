@@ -537,6 +537,7 @@ func (e *Env) vpcConfig() (template.VPCConfig, error) {
 		AllowVPCIngress:     e.in.Mft.HTTPConfig.Private.HasVPCIngress(),
 		SecurityGroupConfig: securityGroupConfig,
 		FlowLogs:            flowLogs,
+		IPv6Enabled:         e.in.Mft.Network.VPC.IPv6Enabled(),
 	}, nil
 }
 

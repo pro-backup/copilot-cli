@@ -31,7 +31,8 @@ const (
 // scheduled job manfiest.
 type ScheduledJob struct {
 	*ecsWkld
-	manifest *manifest.ScheduledJob
+	manifest       *manifest.ScheduledJob
+	envIPv6Enabled bool
 
 	parser scheduledJobReadParser
 }
@@ -89,6 +90,7 @@ func (e errDurationInvalid) Error() string {
 // ScheduledJobConfig contains data required to initialize a scheduled job stack.
 type ScheduledJobConfig struct {
 	App                *config.Application
+	EnvManifest        *manifest.Environment
 	Env                string
 	Manifest           *manifest.ScheduledJob
 	ArtifactBucketName string
@@ -105,6 +107,11 @@ func NewScheduledJob(cfg ScheduledJobConfig) (*ScheduledJob, error) {
 		return nil, fmt.Errorf("scheduled job custom resources: %w", err)
 	}
 	cfg.RuntimeConfig.loadCustomResourceURLs(cfg.ArtifactBucketName, uploadableCRs(crs).convert())
+
+	var envIPv6Enabled bool
+	if cfg.EnvManifest != nil {
+		envIPv6Enabled = cfg.EnvManifest.Network.VPC.IPv6Enabled()
+	}
 
 	return &ScheduledJob{
 		ecsWkld: &ecsWkld{
@@ -126,7 +133,8 @@ func NewScheduledJob(cfg ScheduledJobConfig) (*ScheduledJob, error) {
 			tc:                  cfg.Manifest.TaskConfig,
 			taskDefOverrideFunc: override.CloudFormationTemplate,
 		},
-		manifest: cfg.Manifest,
+		manifest:       cfg.Manifest,
+		envIPv6Enabled: envIPv6Enabled,
 
 		parser: fs,
 	}, nil
@@ -189,7 +197,7 @@ func (j *ScheduledJob) Template() (string, error) {
 		LogConfig:                convertLogging(j.manifest.Logging),
 		DockerLabels:             j.manifest.ImageConfig.Image.DockerLabels,
 		Storage:                  convertStorageOpts(j.manifest.Name, j.manifest.Storage),
-		Network:                  convertNetworkConfig(j.manifest.Network),
+		Network:                  convertNetworkConfig(j.manifest.Network, j.envIPv6Enabled),
 		EntryPoint:               entrypoint,
 		Command:                  command,
 		DependsOn:                convertDependsOn(j.manifest.ImageConfig.Image.DependsOn),

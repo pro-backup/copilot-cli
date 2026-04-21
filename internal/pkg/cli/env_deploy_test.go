@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
+	ec2pkg "github.com/aws/copilot-cli/internal/pkg/aws/ec2"
 	"github.com/aws/copilot-cli/internal/pkg/aws/identity"
 	"github.com/aws/copilot-cli/internal/pkg/cli/deploy"
 	"github.com/aws/copilot-cli/internal/pkg/cli/mocks"
@@ -17,12 +18,73 @@ import (
 	"github.com/aws/copilot-cli/internal/pkg/version"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 type deployEnvAskMocks struct {
 	ws    *mocks.MockwsEnvironmentReader
 	sel   *mocks.MockwsEnvironmentSelector
 	store *mocks.Mockstore
+}
+
+func TestDeployEnvOpts_validateIPv6Toggle(t *testing.T) {
+	testCases := map[string]struct {
+		manifestIPv6 bool
+		stackOutputs map[string]string
+		wantErrIs    error
+	}{
+		"both off — no-op": {
+			manifestIPv6: false,
+			stackOutputs: map[string]string{},
+			wantErrIs:    nil,
+		},
+		"both on — no-op": {
+			manifestIPv6: true,
+			stackOutputs: map[string]string{"IPv6Enabled": "true"},
+			wantErrIs:    nil,
+		},
+		"off-to-on toggle rejected": {
+			manifestIPv6: true,
+			stackOutputs: map[string]string{},
+			wantErrIs:    errIPv6ToggleOnExistingEnv,
+		},
+		"on-to-off toggle rejected": {
+			manifestIPv6: false,
+			stackOutputs: map[string]string{"IPv6Enabled": "true"},
+			wantErrIs:    errIPv6ToggleOnExistingEnv,
+		},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockDescriber := mocks.NewMockenvStackOutputsGetter(ctrl)
+			mockDescriber.EXPECT().Outputs().Return(tc.stackOutputs, nil)
+
+			rawMft := "name: test\ntype: Environment\n"
+			if tc.manifestIPv6 {
+				rawMft += "network:\n  vpc:\n    ipv6:\n      enabled: true\n"
+			}
+			mft, err := manifest.UnmarshalEnvironment([]byte(rawMft))
+			require.NoError(t, err)
+
+			opts := &deployEnvOpts{
+				deployEnvVars: deployEnvVars{appName: "demo", name: "test"},
+				mft:           mft,
+				newEnvDescriber: func(_, _ string) (envStackOutputsGetter, error) {
+					return mockDescriber, nil
+				},
+			}
+
+			err = opts.validateIPv6Toggle()
+			if tc.wantErrIs == nil {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, tc.wantErrIs)
+			}
+		})
+	}
 }
 
 func TestDeployEnvOpts_Ask(t *testing.T) {
@@ -460,6 +522,125 @@ func TestDeployEnvOpts_Execute(t *testing.T) {
 			err := opts.Execute()
 			if tc.wantedErr != nil {
 				require.Contains(t, err.Error(), tc.wantedErr.Error())
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestDeployEnvOpts_Execute_ImportedVPCIPv6Validator exercises validateIPv6Readiness
+// in isolation (not via Execute) — validateIPv6Toggle already has its own tests,
+// and this keeps the subject-under-test narrow.
+func TestDeployEnvOpts_Execute_ImportedVPCIPv6Validator(t *testing.T) {
+	const (
+		appName = "demo"
+		envName = "test"
+	)
+
+	testCases := map[string]struct {
+		rawManifest string
+		setupEC2    func(*mocks.Mockec2Client)
+		wantErrIs   error
+	}{
+		"imported + ipv6 passes readiness check": {
+			rawManifest: `name: test
+type: Environment
+network:
+  vpc:
+    id: vpc-abc
+    ipv6:
+      enabled: true
+    subnets:
+      public:
+        - id: subnet-pub1
+        - id: subnet-pub2
+      private:
+        - id: subnet-priv1
+        - id: subnet-priv2
+`,
+			setupEC2: func(m *mocks.Mockec2Client) {
+				m.EXPECT().HasVPCIPv6("vpc-abc").Return(true, nil)
+				m.EXPECT().SubnetsByIDs([]string{"subnet-pub1", "subnet-pub2", "subnet-priv1", "subnet-priv2"}).Return([]ec2pkg.Subnet{
+					{Resource: ec2pkg.Resource{ID: "subnet-pub1"}, IPv6CIDRBlocks: []string{"2001:db8::/64"}},
+					{Resource: ec2pkg.Resource{ID: "subnet-pub2"}, IPv6CIDRBlocks: []string{"2001:db8:1::/64"}},
+					{Resource: ec2pkg.Resource{ID: "subnet-priv1"}, IPv6CIDRBlocks: []string{"2001:db8:2::/64"}},
+					{Resource: ec2pkg.Resource{ID: "subnet-priv2"}, IPv6CIDRBlocks: []string{"2001:db8:3::/64"}},
+				}, nil)
+			},
+			wantErrIs: nil,
+		},
+		"imported + ipv6 fails readiness check: VPC missing IPv6": {
+			rawManifest: `name: test
+type: Environment
+network:
+  vpc:
+    id: vpc-abc
+    ipv6:
+      enabled: true
+    subnets:
+      public:
+        - id: subnet-pub1
+        - id: subnet-pub2
+      private:
+        - id: subnet-priv1
+        - id: subnet-priv2
+`,
+			setupEC2: func(m *mocks.Mockec2Client) {
+				m.EXPECT().HasVPCIPv6("vpc-abc").Return(false, nil)
+			},
+			wantErrIs: errImportedVPCMissingIPv6,
+		},
+		"managed VPC + ipv6 skips readiness check": {
+			rawManifest: `name: test
+type: Environment
+network:
+  vpc:
+    ipv6:
+      enabled: true
+`,
+			setupEC2:  func(m *mocks.Mockec2Client) { /* no EC2 calls expected */ },
+			wantErrIs: nil,
+		},
+		"imported VPC + ipv6 off skips readiness check": {
+			rawManifest: `name: test
+type: Environment
+network:
+  vpc:
+    id: vpc-abc
+    subnets:
+      public:
+        - id: subnet-pub1
+        - id: subnet-pub2
+      private:
+        - id: subnet-priv1
+        - id: subnet-priv2
+`,
+			setupEC2:  func(m *mocks.Mockec2Client) { /* no EC2 calls expected */ },
+			wantErrIs: nil,
+		},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockEC2 := mocks.NewMockec2Client(ctrl)
+			tc.setupEC2(mockEC2)
+
+			// The test only exercises the pre-deploy validation surface.
+			// We construct a deployEnvOpts with just enough wiring to reach
+			// validateIPv6Readiness, then stop before the real deploy path.
+			opts := &deployEnvOpts{
+				deployEnvVars: deployEnvVars{appName: appName, name: envName},
+				ec2Client:     mockEC2,
+			}
+			var mft manifest.Environment
+			require.NoError(t, yaml.Unmarshal([]byte(tc.rawManifest), &mft))
+			opts.mft = &mft
+
+			err := opts.validateIPv6Readiness()
+
+			if tc.wantErrIs != nil {
+				require.ErrorIs(t, err, tc.wantErrIs)
 			} else {
 				require.NoError(t, err)
 			}

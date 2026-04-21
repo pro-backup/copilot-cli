@@ -55,6 +55,11 @@ Conditions:
     !Not [!Equals [ !Ref EFSWorkloads, ""]]
   CreateNATGateways:
     !Not [!Equals [ !Ref NATWorkloads, ""]]
+{{- if .VPCConfig.IPv6Enabled }}
+  CreatePrivateRouteTables: !Or
+    - !Condition CreateNATGateways
+    - !Equals [ "true", "true" ]
+{{- end }}
   CreateAppRunnerVPCEndpoint:
     !Not [!Equals [ !Ref AppRunnerPrivateWorkloads, ""]]
   ManagedAliases: !And
@@ -73,8 +78,8 @@ Resources:
 {{include "cdn-resources" . | indent 2}}
 {{- end}}
 {{- if not .VPCConfig.Imported}}
-{{include "vpc-resources" .VPCConfig.Managed | indent 2}}
-{{include "nat-gateways" .VPCConfig.Managed | indent 2}}
+{{include "vpc-resources" . | indent 2}}
+{{include "nat-gateways" . | indent 2}}
 {{- end}}
   # Creates a service discovery namespace with the form provided in the parameter.
   # For new environments after 1.5.0, this is "env.app.local". For upgraded environments from
@@ -125,11 +130,19 @@ Resources:
           ToPort: 80
         {{- end}}
         {{- range $cidr := .PublicHTTPConfig.PublicALBSourceIPs }}
+        {{- if isIPv6CIDR $cidr }}
+        - CidrIpv6: {{$cidr}}
+          Description: Allow ingress from source IPv6 {{$cidr}} on port 80
+          FromPort: 80
+          IpProtocol: tcp
+          ToPort: 80
+        {{- else }}
         - CidrIp: {{$cidr}}
           Description: Allow ingress from source IP {{$cidr}} on port 80
           FromPort: 80
           IpProtocol: tcp
           ToPort: 80
+        {{- end }}
         {{- end }}
         {{- else}}
         - CidrIp: 0.0.0.0/0
@@ -163,11 +176,19 @@ Resources:
           ToPort: 443
         {{- end}}
         {{- range $cidr := .PublicHTTPConfig.PublicALBSourceIPs }}
+        {{- if isIPv6CIDR $cidr }}
+        - CidrIpv6: {{$cidr}}
+          Description: Allow ingress from source IPv6 {{$cidr}} on port 443
+          FromPort: 443
+          IpProtocol: tcp
+          ToPort: 443
+        {{- else }}
         - CidrIp: {{$cidr}}
           Description: Allow ingress from source IP {{$cidr}} on port 443
           FromPort: 443
           IpProtocol: tcp
           ToPort: 443
+        {{- end }}
         {{- end }}
         {{- else}}
         - CidrIp: 0.0.0.0/0
@@ -184,6 +205,32 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 'copilot-${AppName}-${EnvironmentName}-lb-https'
+{{- if .VPCConfig.IPv6Enabled }}
+  PublicHTTPLoadBalancerSecurityGroupIngressIPv6:
+    Metadata:
+      'aws:copilot:description': 'An IPv6 inbound rule to the public HTTP load balancer security group for port 80'
+    Condition: CreateALB
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref PublicHTTPLoadBalancerSecurityGroup
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      CidrIpv6: ::/0
+      Description: Allow from anyone over IPv6 on port 80
+  PublicHTTPSLoadBalancerSecurityGroupIngressIPv6:
+    Metadata:
+      'aws:copilot:description': 'An IPv6 inbound rule to the public HTTPS load balancer security group for port 443'
+    Condition: ExportHTTPSListener
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref PublicHTTPSLoadBalancerSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIpv6: ::/0
+      Description: Allow from anyone over IPv6 on port 443
+{{- end }}
   InternalLoadBalancerSecurityGroup:
     Metadata:
       'aws:copilot:description': 'A security group for your internal load balancer allowing HTTP traffic from within the VPC'
@@ -232,6 +279,15 @@ Resources:
           CidrIp: {{$securityRule.CidrIP}}
       {{- end }}
 {{- end}}
+{{- if .VPCConfig.IPv6Enabled }}
+  EnvironmentSecurityGroupEgressIPv6:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref EnvironmentSecurityGroup
+      IpProtocol: -1
+      CidrIpv6: ::/0
+      Description: Allow all IPv6 outbound traffic
+{{- end }}
   EnvironmentHTTPSecurityGroupIngressFromPublicALB:
     Type: AWS::EC2::SecurityGroupIngress
     Condition: CreateALB
@@ -296,6 +352,32 @@ Resources:
       ToPort: 443
       IpProtocol: tcp
       GroupId: !Ref InternalLoadBalancerSecurityGroup
+{{- if .VPCConfig.IPv6Enabled }}
+  InternalLoadBalancerSecurityGroupIngressFromHttpIPv6:
+    Metadata:
+      'aws:copilot:description': 'An IPv6 inbound rule to the internal load balancer security group for port 80 within the VPC'
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: CreateInternalALB
+    Properties:
+      Description: Allow from within the VPC over IPv6 on port 80
+      CidrIpv6: ::/0
+      FromPort: 80
+      ToPort: 80
+      IpProtocol: tcp
+      GroupId: !Ref InternalLoadBalancerSecurityGroup
+  InternalLoadBalancerSecurityGroupIngressFromHttpsIPv6:
+    Metadata:
+      'aws:copilot:description': 'An IPv6 inbound rule to the internal load balancer security group for port 443 within the VPC'
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: ExportInternalHTTPSListener
+    Properties:
+      Description: Allow from within the VPC over IPv6 on port 443
+      CidrIpv6: ::/0
+      FromPort: 443
+      ToPort: 443
+      IpProtocol: tcp
+      GroupId: !Ref InternalLoadBalancerSecurityGroup
+{{- end }}
 {{- end}}
   PublicLoadBalancer:
     Metadata:
@@ -321,6 +403,9 @@ Resources:
           Value: false
       {{- end }}
       Scheme: internet-facing
+      {{- if .VPCConfig.IPv6Enabled }}
+      IpAddressType: dualstack
+      {{- end }}
       SecurityGroups: 
         - !GetAtt PublicHTTPLoadBalancerSecurityGroup.GroupId
         - !If [ExportHTTPSListener, !GetAtt PublicHTTPSLoadBalancerSecurityGroup.GroupId, !Ref "AWS::NoValue"]
@@ -402,6 +487,9 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Scheme: internal
+      {{- if .VPCConfig.IPv6Enabled }}
+      IpAddressType: dualstack
+      {{- end }}
       SecurityGroups: [ !GetAtt InternalLoadBalancerSecurityGroup.GroupId ]
 {{- if .PrivateHTTPConfig.CustomALBSubnets}}
       Subnets: {{fmtSlice .PrivateHTTPConfig.CustomALBSubnets}}
@@ -892,3 +980,27 @@ Outputs:
     Export:
       Name: !Sub ${AWS::StackName}-AppRunnerVpcEndpointId
 {{- end}}
+{{- if .VPCConfig.IPv6Enabled }}
+  IPv6Enabled:
+    Description: "Whether the environment VPC has IPv6 dual-stack enabled."
+    Value: "true"
+    Export:
+      Name: !Sub ${AppName}-${EnvironmentName}-IPv6Enabled
+{{- if not .VPCConfig.Imported }}
+  VpcIpv6CidrBlock:
+    Description: "The Amazon-provided IPv6 /56 CIDR associated with the VPC."
+    Value: !Select [0, !GetAtt VPC.Ipv6CidrBlocks]
+    Export:
+      Name: !Sub ${AppName}-${EnvironmentName}-VpcIpv6CidrBlock
+  PublicSubnetsIpv6CidrBlocks:
+    Description: "Comma-delimited list of IPv6 CIDR blocks for the public subnets."
+    Value: !Join [ ',', [ {{range $ind, $cidr := .VPCConfig.Managed.PublicSubnetCIDRs}}!Select [0, !GetAtt PublicSubnet{{inc $ind}}.Ipv6CidrBlocks], {{end}}] ]
+    Export:
+      Name: !Sub ${AppName}-${EnvironmentName}-PublicSubnetsIpv6CidrBlocks
+  PrivateSubnetsIpv6CidrBlocks:
+    Description: "Comma-delimited list of IPv6 CIDR blocks for the private subnets."
+    Value: !Join [ ',', [ {{range $ind, $cidr := .VPCConfig.Managed.PrivateSubnetCIDRs}}!Select [0, !GetAtt PrivateSubnet{{inc $ind}}.Ipv6CidrBlocks], {{end}}] ]
+    Export:
+      Name: !Sub ${AppName}-${EnvironmentName}-PrivateSubnetsIpv6CidrBlocks
+{{- end }}
+{{- end }}

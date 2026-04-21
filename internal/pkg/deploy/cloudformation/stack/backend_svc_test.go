@@ -694,3 +694,86 @@ func TestBackendService_Parameters(t *testing.T) {
 		},
 	}, params)
 }
+
+func TestBackendService_envIPv6EnabledPropagatesToNetworkOpts(t *testing.T) {
+	conf := BackendServiceConfig{
+		App:         &config.Application{Name: "mockApp"},
+		EnvManifest: mustEnvManifestWithIPv6(t, true),
+		Manifest: manifest.NewBackendService(manifest.BackendServiceProps{
+			WorkloadProps: manifest.WorkloadProps{
+				Name:       "api",
+				Dockerfile: testDockerfile,
+			},
+			Port: 8080,
+		}),
+		RuntimeConfig: RuntimeConfig{Version: "v1.29.0"},
+	}
+	got, err := NewBackendService(conf)
+	require.NoError(t, err)
+	require.True(t, got.envIPv6Enabled, "BackendService.envIPv6Enabled must be set from envManifest.Network.VPC.IPv6Enabled()")
+}
+
+func TestBackendService_Template_IPv6Enabled_RendersAssignIpv6Address(t *testing.T) {
+	conf := BackendServiceConfig{
+		App:                &config.Application{Name: "mockApp"},
+		EnvManifest:        mustEnvManifestWithIPv6(t, true),
+		ArtifactBucketName: "mockBucket",
+		Manifest: manifest.NewBackendService(manifest.BackendServiceProps{
+			WorkloadProps: manifest.WorkloadProps{
+				Name:       "api",
+				Dockerfile: testDockerfile,
+			},
+			Port: 8080,
+		}),
+		RuntimeConfig: RuntimeConfig{
+			Version:   "v1.29.0",
+			Region:    "us-west-2",
+			AccountID: "123456789012",
+		},
+	}
+	stk, err := NewBackendService(conf)
+	require.NoError(t, err)
+	tpl, err := stk.Template()
+	require.NoError(t, err)
+	require.Contains(t, tpl, "AssignIpv6Address: ENABLED")
+}
+
+// TestBackendService_IPv6PropagatesToListenerTemplate proves the
+// WorkloadOpts.IPv6Enabled flag reaches the BackendService listener
+// template. INTENTIONALLY FAILS until Task 12 lands the AAAA record in
+// http-listener.yml.
+func TestBackendService_IPv6PropagatesToListenerTemplate(t *testing.T) {
+	// Build a BackendService manifest with an internal ALB (http.path set)
+	// so the http-listener partial renders LoadBalancerInternalDNSAlias.
+	mft := manifest.NewBackendService(manifest.BackendServiceProps{
+		WorkloadProps: manifest.WorkloadProps{
+			Name:       "api",
+			Dockerfile: testDockerfile,
+		},
+		Port: 8080,
+	})
+	mft.HTTP = manifest.HTTP{
+		Main: manifest.RoutingRule{
+			Path: aws.String("/"),
+		},
+	}
+	conf := BackendServiceConfig{
+		App:                &config.Application{Name: "mockApp"},
+		EnvManifest:        mustEnvManifestWithIPv6(t, true),
+		ArtifactBucketName: "mockBucket",
+		Manifest:           mft,
+		RuntimeConfig: RuntimeConfig{
+			Version:   "v1.29.0",
+			Region:    "us-west-2",
+			AccountID: "123456789012",
+		},
+	}
+	stk, err := NewBackendService(conf)
+	require.NoError(t, err)
+	tpl, err := stk.Template()
+	require.NoError(t, err)
+	require.Contains(t, tpl, "LoadBalancerInternalDNSAlias",
+		"test setup bug: backend service must have ALB enabled to exercise http-listener.yml")
+	require.Contains(t, tpl, "Type: AAAA",
+		"BackendService in IPv6 env with internal ALB must emit AAAA record (lands in Task 12)")
+}

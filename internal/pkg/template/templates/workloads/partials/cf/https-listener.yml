@@ -20,6 +20,19 @@ LoadBalancerDNSAlias:
       AliasTarget:
         HostedZoneId: !GetAtt EnvControllerAction.PublicLoadBalancerHostedZone
         DNSName: !GetAtt EnvControllerAction.PublicLoadBalancerDNSName
+    {{- if .IPv6Enabled }}
+    - Name:
+        !Join
+          - '.'
+          - - !Ref WorkloadName
+            - Fn::ImportValue:
+                !Sub "${AppName}-${EnvName}-SubDomain"
+            - ""
+      Type: AAAA
+      AliasTarget:
+        HostedZoneId: !GetAtt EnvControllerAction.PublicLoadBalancerHostedZone
+        DNSName: !GetAtt EnvControllerAction.PublicLoadBalancerDNSName
+    {{- end }}
 {{- else}}
 {{- range $hostedZoneID, $aliases := .ALBListener.HostedZoneAliases}}
 LoadBalancerDNSAlias{{$hostedZoneID}}:
@@ -41,6 +54,18 @@ LoadBalancerDNSAlias{{$hostedZoneID}}:
           HostedZoneId: !GetAtt EnvControllerAction.PublicLoadBalancerHostedZone
           DNSName: !GetAtt EnvControllerAction.PublicLoadBalancerDNSName
           {{- end}}
+      {{- if $.IPv6Enabled }}
+      - Name: {{quote $alias}}
+        Type: AAAA
+        AliasTarget:
+          {{- if eq $.WorkloadType "Backend Service"}}
+          HostedZoneId: !GetAtt EnvControllerAction.InternalLoadBalancerHostedZone
+          DNSName: !GetAtt EnvControllerAction.InternalLoadBalancerDNSName
+          {{- else}}
+          HostedZoneId: !GetAtt EnvControllerAction.PublicLoadBalancerHostedZone
+          DNSName: !GetAtt EnvControllerAction.PublicLoadBalancerDNSName
+          {{- end}}
+      {{- end}}
     {{- end}}
 {{- end}}
 {{- end}}

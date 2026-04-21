@@ -37,6 +37,7 @@ func TestLoadBalancedWebService_TemplateInteg(t *testing.T) {
 		svcStackPath  string
 		svcParamsPath string
 		mockImportALB *elbv2.LoadBalancer
+		envIPv6       bool
 	}{
 		"default env": {
 			envName:       "test",
@@ -71,6 +72,12 @@ func TestLoadBalancedWebService_TemplateInteg(t *testing.T) {
 			envName:       "prod",
 			svcStackPath:  "svc-prod.stack.yml",
 			svcParamsPath: "svc-prod.params.json",
+		},
+		"ipv6 env": {
+			envName:       "test",
+			svcStackPath:  "svc-ipv6-test.stack.yml",
+			svcParamsPath: "svc-ipv6-test.params.json",
+			envIPv6:       true,
 		},
 	}
 	val, exist := os.LookupEnv("TAG")
@@ -117,12 +124,30 @@ func TestLoadBalancedWebService_TemplateInteg(t *testing.T) {
 		require.ErrorAs(t, err, &notFound)
 
 		svcDiscoveryEndpointName := fmt.Sprintf("%s.%s.local", tc.envName, appName)
-		envConfig := &manifest.Environment{
-			Workload: manifest.Workload{
-				Name: &tc.envName,
-			},
+		var envConfig *manifest.Environment
+		if tc.envIPv6 {
+			rawEnv := `name: test
+type: Environment
+network:
+  vpc:
+    ipv6:
+      enabled: true
+http:
+  public:
+    certificates:
+      - mockCertARN
+`
+			parsed, err := manifest.UnmarshalEnvironment([]byte(rawEnv))
+			require.NoError(t, err)
+			envConfig = parsed
+		} else {
+			envConfig = &manifest.Environment{
+				Workload: manifest.Workload{
+					Name: &tc.envName,
+				},
+			}
+			envConfig.HTTPConfig.Public.Certificates = []string{"mockCertARN"}
 		}
-		envConfig.HTTPConfig.Public.Certificates = []string{"mockCertARN"}
 		var opts []stack.LoadBalancedWebServiceOption
 		if tc.mockImportALB != nil {
 			opts = append(opts, stack.WithImportedALB(tc.mockImportALB))

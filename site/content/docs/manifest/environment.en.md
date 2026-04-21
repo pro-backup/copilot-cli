@@ -116,6 +116,60 @@ The ID of the VPC to import. This field is mutually exclusive with `cidr`.
 <span class="parent-field">network.vpc.</span><a id="network-vpc-cidr" href="#network-vpc-cidr" class="field">`cidr`</a> <span class="type">String</span>    
 An IPv4 CIDR block to associate with the Copilot-generated VPC. This field is mutually exclusive with `id`.
 
+<span class="parent-field">network.vpc.</span><a id="network-vpc-ipv6" href="#network-vpc-ipv6" class="field">`ipv6`</a> <span class="type">Map</span>    
+Configures IPv6 dual-stack networking on the managed VPC. Optional. When absent or disabled, the environment is IPv4-only (current behavior).
+
+Example:
+```yaml
+network:
+  vpc:
+    ipv6:
+      enabled: true
+```
+
+When enabled:
+
+- The VPC is associated with an Amazon-provided `/56` IPv6 CIDR block.
+- Every managed subnet receives a disjoint `/64` block.
+- Subnet-level `AssignIpv6AddressOnCreation` is set to `true`.
+- Public subnets get a `::/0` default route to the Internet Gateway.
+- Private subnets get a `::/0` default route to a new Egress-Only Internet Gateway (private subnets retain their existing IPv4 default route through the NAT Gateway, when present).
+
+Workload-side effects:
+
+- Every **Linux** workload (Backend Service, Load Balanced Web Service, Worker Service, Scheduled Job) deployed into the environment automatically receives a global IPv6 address on its Fargate task ENI and can reach the IPv6 internet via the Egress-Only Internet Gateway. No per-service manifest field is required.
+- Windows Fargate does not support IPv6 task networking. Windows workloads deployed into a dual-stack environment remain IPv4-only and print a one-line `Note:` at deploy time.
+- The environment's shared security group gains a standalone `::/0` IPv6 egress rule so tasks can reach IPv6 destinations.
+
+Load-balancer ingress:
+
+- Copilot also configures the shared public and internal Application Load Balancers to run in `dualstack` mode. LoadBalancedWebService and BackendService aliases get Route 53 `AAAA` records alongside the existing `A` records so clients resolve the service over IPv6.
+- Security group ingress on the shared ALBs is opened for `::/0` (in addition to the existing IPv4 rules). When `http.public.security_groups.ingress` supplies explicit CIDRs, IPv6 CIDRs in that list render as `CidrIpv6` while IPv4 CIDRs continue to render as `CidrIp`.
+- IPv6 ingress is not available for per-workload Network Load Balancers in this release; that is tracked as a follow-up.
+
+Restrictions (foundation release):
+
+- Not supported as an in-place toggle on an existing environment — create a new environment with IPv6 enabled.
+
+Imported VPCs:
+
+IPv6 can be enabled on an environment that imports an existing VPC,
+provided the VPC and every imported public/private subnet already has
+at least one associated IPv6 CIDR block. Copilot validates this at
+`env deploy` time by describing the VPC; if any resource is missing
+IPv6, the command exits with an error naming the resource.
+
+Copilot does not manage IPv6 routing on imported VPCs. Before enabling
+`network.vpc.ipv6.enabled`, ensure your VPC has:
+
+- A `/56` IPv6 CIDR association on the VPC (Amazon-provided or BYOIP).
+- A `/64` IPv6 CIDR association on every subnet you import.
+- An `EgressOnlyInternetGateway` attached to the VPC for private-subnet
+  egress (or an equivalent path such as a Transit Gateway).
+- `::/0` IPv6 routes on the relevant route tables — `::/0 →
+  InternetGateway` for public subnets, `::/0 → EgressOnlyIGW` for
+  private subnets.
+
 <span class="parent-field">network.vpc.</span><a id="network-vpc-subnets" href="#network-vpc-subnets" class="field">`subnets`</a> <span class="type">Map</span>    
 Configure public and private subnets in a VPC.
 

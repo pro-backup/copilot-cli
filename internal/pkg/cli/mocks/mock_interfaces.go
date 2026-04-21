@@ -6535,6 +6535,21 @@ func (mr *Mockec2ClientMockRecorder) HasDNSSupport(vpcID interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasDNSSupport", reflect.TypeOf((*Mockec2Client)(nil).HasDNSSupport), vpcID)
 }
 
+// HasVPCIPv6 mocks base method.
+func (m *Mockec2Client) HasVPCIPv6(vpcID string) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HasVPCIPv6", vpcID)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HasVPCIPv6 indicates an expected call of HasVPCIPv6.
+func (mr *Mockec2ClientMockRecorder) HasVPCIPv6(vpcID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasVPCIPv6", reflect.TypeOf((*Mockec2Client)(nil).HasVPCIPv6), vpcID)
+}
+
 // ListAZs mocks base method.
 func (m *Mockec2Client) ListAZs() ([]ec2.AZ, error) {
 	m.ctrl.T.Helper()
@@ -6548,6 +6563,21 @@ func (m *Mockec2Client) ListAZs() ([]ec2.AZ, error) {
 func (mr *Mockec2ClientMockRecorder) ListAZs() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAZs", reflect.TypeOf((*Mockec2Client)(nil).ListAZs))
+}
+
+// SubnetsByIDs mocks base method.
+func (m *Mockec2Client) SubnetsByIDs(ids []string) ([]ec2.Subnet, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubnetsByIDs", ids)
+	ret0, _ := ret[0].([]ec2.Subnet)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubnetsByIDs indicates an expected call of SubnetsByIDs.
+func (mr *Mockec2ClientMockRecorder) SubnetsByIDs(ids interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubnetsByIDs", reflect.TypeOf((*Mockec2Client)(nil).SubnetsByIDs), ids)
 }
 
 // MockserviceResumer is a mock of serviceResumer interface.
@@ -8281,4 +8311,42 @@ func (m *MockdockerWorkload) Dockerfile() string {
 func (mr *MockdockerWorkloadMockRecorder) Dockerfile() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dockerfile", reflect.TypeOf((*MockdockerWorkload)(nil).Dockerfile))
+}
+
+// MockenvStackOutputsGetter is a mock of envStackOutputsGetter interface.
+type MockenvStackOutputsGetter struct {
+	ctrl     *gomock.Controller
+	recorder *MockenvStackOutputsGetterMockRecorder
+}
+
+// MockenvStackOutputsGetterMockRecorder is the mock recorder for MockenvStackOutputsGetter.
+type MockenvStackOutputsGetterMockRecorder struct {
+	mock *MockenvStackOutputsGetter
+}
+
+// NewMockenvStackOutputsGetter creates a new mock instance.
+func NewMockenvStackOutputsGetter(ctrl *gomock.Controller) *MockenvStackOutputsGetter {
+	mock := &MockenvStackOutputsGetter{ctrl: ctrl}
+	mock.recorder = &MockenvStackOutputsGetterMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockenvStackOutputsGetter) EXPECT() *MockenvStackOutputsGetterMockRecorder {
+	return m.recorder
+}
+
+// Outputs mocks base method.
+func (m *MockenvStackOutputsGetter) Outputs() (map[string]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Outputs")
+	ret0, _ := ret[0].(map[string]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Outputs indicates an expected call of Outputs.
+func (mr *MockenvStackOutputsGetterMockRecorder) Outputs() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Outputs", reflect.TypeOf((*MockenvStackOutputsGetter)(nil).Outputs))
 }

@@ -21,7 +21,8 @@ import (
 // WorkerService represents the configuration needed to create a CloudFormation stack from a worker service manifest.
 type WorkerService struct {
 	*ecsWkld
-	manifest *manifest.WorkerService
+	manifest       *manifest.WorkerService
+	envIPv6Enabled bool
 
 	parser workerSvcReadParser
 }
@@ -29,6 +30,7 @@ type WorkerService struct {
 // WorkerServiceConfig contains data required to initialize a scheduled job stack.
 type WorkerServiceConfig struct {
 	App                *config.Application
+	EnvManifest        *manifest.Environment
 	Env                string
 	Manifest           *manifest.WorkerService
 	ArtifactBucketName string
@@ -45,6 +47,11 @@ func NewWorkerService(cfg WorkerServiceConfig) (*WorkerService, error) {
 		return nil, fmt.Errorf("worker service custom resources: %w", err)
 	}
 	cfg.RuntimeConfig.loadCustomResourceURLs(cfg.ArtifactBucketName, uploadableCRs(crs).convert())
+
+	var envIPv6Enabled bool
+	if cfg.EnvManifest != nil {
+		envIPv6Enabled = cfg.EnvManifest.Network.VPC.IPv6Enabled()
+	}
 
 	return &WorkerService{
 		ecsWkld: &ecsWkld{
@@ -66,8 +73,9 @@ func NewWorkerService(cfg WorkerServiceConfig) (*WorkerService, error) {
 			tc:                  cfg.Manifest.TaskConfig,
 			taskDefOverrideFunc: override.CloudFormationTemplate,
 		},
-		manifest: cfg.Manifest,
-		parser:   fs,
+		manifest:       cfg.Manifest,
+		envIPv6Enabled: envIPv6Enabled,
+		parser:         fs,
 	}, nil
 }
 
@@ -150,7 +158,7 @@ func (s *WorkerService) Template() (string, error) {
 		DockerLabels:             s.manifest.ImageConfig.Image.DockerLabels,
 		CustomResources:          crs,
 		Storage:                  convertStorageOpts(s.manifest.Name, s.manifest.Storage),
-		Network:                  convertNetworkConfig(s.manifest.Network),
+		Network:                  convertNetworkConfig(s.manifest.Network, s.envIPv6Enabled),
 		DeploymentConfiguration:  convertWorkerDeploymentConfig(s.manifest.WorkerServiceConfig.DeployConfig),
 		EntryPoint:               entrypoint,
 		ServiceConnectOpts:       scOpts,
