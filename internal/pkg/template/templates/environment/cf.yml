@@ -73,7 +73,7 @@ Resources:
 {{include "cdn-resources" . | indent 2}}
 {{- end}}
 {{- if not .VPCConfig.Imported}}
-{{include "vpc-resources" .VPCConfig.Managed | indent 2}}
+{{include "vpc-resources" . | indent 2}}
 {{include "nat-gateways" .VPCConfig.Managed | indent 2}}
 {{- end}}
   # Creates a service discovery namespace with the form provided in the parameter.

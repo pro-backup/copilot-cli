@@ -3,7 +3,7 @@ VPC:
     'aws:copilot:description': 'A Virtual Private Cloud to control networking of your AWS resources'
   Type: AWS::EC2::VPC
   Properties:
-    CidrBlock: {{.CIDR}}
+    CidrBlock: {{.VPCConfig.Managed.CIDR}}
     EnableDnsHostnames: true
     EnableDnsSupport: true
     InstanceTenancy: default
@@ -44,8 +44,25 @@ InternetGatewayAttachment:
     InternetGatewayId: !Ref InternetGateway
     VpcId: !Ref VPC
 
-{{- $azs := .AZs }}
-{{- range $ind, $cidr := .PublicSubnetCIDRs}}
+{{- if .VPCConfig.IPv6Enabled }}
+VPCCidrBlockIPv6:
+  Metadata:
+    'aws:copilot:description': 'An Amazon-provided IPv6 /56 CIDR block associated with the VPC'
+  Type: AWS::EC2::VPCCidrBlock
+  Properties:
+    VpcId: !Ref VPC
+    AmazonProvidedIpv6CidrBlock: true
+
+EgressOnlyInternetGateway:
+  Metadata:
+    'aws:copilot:description': 'An egress-only internet gateway for private subnets to reach the IPv6 internet'
+  Type: AWS::EC2::EgressOnlyInternetGateway
+  Properties:
+    VpcId: !Ref VPC
+{{- end }}
+
+{{- $azs := .VPCConfig.Managed.AZs }}
+{{- range $ind, $cidr := .VPCConfig.Managed.PublicSubnetCIDRs}}
 PublicSubnet{{inc $ind}}:
   Metadata:
     'aws:copilot:description': 'Public subnet {{inc $ind}} for resources that can access the internet'
@@ -63,7 +80,7 @@ PublicSubnet{{inc $ind}}:
       - Key: Name
         Value: !Sub 'copilot-${AppName}-${EnvironmentName}-pub{{$ind}}'
 {{- end }}
-{{- range $ind, $cidr := .PrivateSubnetCIDRs }}
+{{- range $ind, $cidr := .VPCConfig.Managed.PrivateSubnetCIDRs }}
 PrivateSubnet{{inc $ind}}:
   Metadata:
     'aws:copilot:description': 'Private subnet {{inc $ind}} for resources with no internet access'
@@ -81,7 +98,7 @@ PrivateSubnet{{inc $ind}}:
       - Key: Name
         Value: !Sub 'copilot-${AppName}-${EnvironmentName}-priv{{$ind}}'
 {{- end }}
-{{- range $ind, $cidr := .PublicSubnetCIDRs}}
+{{- range $ind, $cidr := .VPCConfig.Managed.PublicSubnetCIDRs}}
 PublicSubnet{{inc $ind}}RouteTableAssociation:
   Type: AWS::EC2::SubnetRouteTableAssociation
   Properties:
