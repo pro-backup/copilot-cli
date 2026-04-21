@@ -11,6 +11,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/elbv2"
 	"github.com/aws/copilot-cli/e2e/internal/client"
@@ -115,6 +116,63 @@ var _ = Describe("Imported VPC + IPv6", Ordered, func() {
 
 		It("svc deploy should succeed", func() {
 			Expect(svcDeployErr).NotTo(HaveOccurred())
+		})
+	})
+
+	Context("when deploying into a v4-only imported VPC with IPv6 enabled", func() {
+		const negEnvName = "v4only"
+		var (
+			envInitErr    error
+			envDeployOut  string
+			envDeployErr  error
+		)
+
+		BeforeAll(func() {
+			_, envInitErr = copilotCLI.EnvInit(&client.EnvInitRequest{
+				AppName: appName,
+				EnvName: negEnvName,
+				Profile: "test",
+				VPCImport: client.EnvInitRequestVPCImport{
+					ID:               v4OnlyVPCID,
+					PublicSubnetIDs:  strings.Join(v4OnlyPublicSubnetIDs, ","),
+					PrivateSubnetIDs: strings.Join(v4OnlyPrivateSubnetIDs, ","),
+				},
+				CustomizedEnv: true,
+			})
+			if envInitErr != nil {
+				return
+			}
+
+			patchEnvManifestAddIPv6(negEnvName)
+
+			envDeployOut, envDeployErr = copilotCLI.EnvDeploy(&client.EnvDeployRequest{
+				AppName: appName,
+				Name:    negEnvName,
+			})
+		})
+
+		It("env init into v4-only VPC should succeed", func() {
+			Expect(envInitErr).NotTo(HaveOccurred())
+		})
+
+		It("rejects an imported v4-only VPC with a pre-flight error", func() {
+			By("env deploy must fail with the missing-IPv6 error before any CFN call")
+			Expect(envDeployErr).To(HaveOccurred())
+			Expect(envDeployOut).To(ContainSubstring(v4OnlyVPCID),
+				"error message should name the offending VPC")
+			Expect(strings.ToLower(envDeployOut)).To(ContainSubstring("ipv6"),
+				"error message should mention IPv6")
+
+			By("asserting no copilot env stack was created for the v4-only env")
+			sess, err := session.NewSession(&aws.Config{Region: aws.String(region)})
+			Expect(err).NotTo(HaveOccurred())
+			cfn := cloudformation.New(sess)
+			_, describeErr := cfn.DescribeStacks(&cloudformation.DescribeStacksInput{
+				StackName: aws.String(fmt.Sprintf("%s-%s", appName, negEnvName)),
+			})
+			Expect(describeErr).To(HaveOccurred(),
+				"env stack should not exist — deploy was aborted pre-flight")
+			Expect(describeErr.Error()).To(ContainSubstring("does not exist"))
 		})
 	})
 
