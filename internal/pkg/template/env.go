@@ -203,6 +203,7 @@ type VPCConfig struct {
 	AllowVPCIngress     bool
 	SecurityGroupConfig *SecurityGroupConfig
 	FlowLogs            *VPCFlowLogs
+	IPv6Enabled         bool // Opt-in dual-stack networking on the managed VPC.
 }
 
 // ImportVPC holds the fields to import VPC resources.
@@ -294,6 +295,7 @@ func withEnvParsingFuncs() ParseOption {
 	return func(t *template.Template) *template.Template {
 		return t.Funcs(map[string]interface{}{
 			"inc":               IncFunc,
+			"add":               func(a, b int) int { return a + b },
 			"fmtSlice":          FmtSliceFunc,
 			"quote":             strconv.Quote,
 			"truncate":          truncate,

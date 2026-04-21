@@ -4,7 +4,9 @@
 package template
 
 import (
+	"bytes"
 	"testing"
+	"text/template"
 
 	"github.com/spf13/afero"
 
@@ -98,4 +100,14 @@ func TestTruncate(t *testing.T) {
 			require.Equal(t, tc.expected, truncate(tc.s, tc.maxLen))
 		})
 	}
+}
+
+func TestWithEnvParsingFuncs_AddHelper(t *testing.T) {
+	tpl := template.New("t")
+	tpl = withEnvParsingFuncs()(tpl)
+	parsed, err := tpl.Parse(`{{add 3 4}}`)
+	require.NoError(t, err)
+	var buf bytes.Buffer
+	require.NoError(t, parsed.Execute(&buf, nil))
+	require.Equal(t, "7", buf.String())
 }
