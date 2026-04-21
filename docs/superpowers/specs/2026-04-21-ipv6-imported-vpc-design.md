@@ -182,9 +182,17 @@ the offending VPC ID or subnet ID list in the user-facing message.
 
 ### Wiring into env init and env deploy
 
-Both CLI commands already hold an `ec2Client` and know the imported
-VPC ID + subnet IDs by the time their `Validate()` (or end of `Ask()`)
-runs. Two changes, one per command:
+`env init` already holds an `ec2Client` field
+(`internal/pkg/cli/env_init.go:169`), lazily initialized via
+`ec2.New(o.sess)` before existing subnet-selection checks. `env deploy`
+does **not** yet hold one; this spec plumbs a matching `ec2Client
+ec2Client` field onto `deployEnvOpts`, initialized the same lazy way
+the existing clients on that struct are
+(`deployEnvOpts.newEnvDescriber`, etc.). Reusing the existing
+`ec2Client` interface in `internal/pkg/cli/interfaces.go` keeps the
+mock surface unchanged for other tests.
+
+Two changes, one per command:
 
 ```go
 // pseudocode in env_init.go Validate() / end of Ask()
@@ -276,7 +284,7 @@ associated before enabling "network.vpc.ipv6.enabled".
 | `internal/pkg/cli/ipv6_imported_vpc_validator.go` | New validator + two error sentinels + small `vpcIPv6Describer` interface | +90 |
 | `internal/pkg/cli/ipv6_imported_vpc_validator_test.go` | Table-driven unit tests with mocked EC2 | +150 |
 | `internal/pkg/cli/env_init.go` | Validator call in Validate phase | +15 |
-| `internal/pkg/cli/env_deploy.go` | Validator call in Validate phase | +15 |
+| `internal/pkg/cli/env_deploy.go` | Add `ec2Client ec2Client` field with lazy init; validator call in Validate phase | +30 |
 | `internal/pkg/cli/env_init_test.go`, `env_deploy_test.go` | Call-site propagation tests | +60 |
 | `internal/pkg/aws/ec2/ec2.go` | `DescribeVPC` helper or extension; `Subnet.IPv6CIDRBlocks` field | +30 |
 | `internal/pkg/aws/ec2/ec2_test.go` | Unit tests for IPv6 field population and `HasIPv6` helper | +80 |
@@ -395,12 +403,15 @@ env, then deletes the helper stack.
 
 **Scenario 2 — negative: validator rejects v4-only imported VPC:**
 
-1. Use the default AWS account VPC (v4-only) as the imported VPC.
+1. Deploy a tiny second helper stack (or reuse the `BeforeSuite` stack
+   augmented with a second v4-only VPC) that provisions a plain
+   IPv4-only VPC + two public + two private subnets. Capture its IDs.
 2. Run `copilot env init` with that VPC ID and
    `network.vpc.ipv6.enabled: true`.
 3. Assert the command exits non-zero with stderr containing the
    `errImportedVPCMissingIPv6` message and the VPC ID.
-4. Assert no CFN stack was created (via `DescribeStacks`).
+4. Assert no copilot env CFN stack was created (via `DescribeStacks`).
+5. Tear down the v4-only helper VPC in `AfterSuite`.
 
 ### Custom resource (Jest) tests
 
