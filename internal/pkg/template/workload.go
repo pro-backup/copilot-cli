@@ -773,6 +773,17 @@ func (p RuntimePlatformOpts) Version() string {
 	return "LATEST"
 }
 
+// IsWindows returns true if the platform's OS family is one of the
+// supported Windows Server variants.
+func (p RuntimePlatformOpts) IsWindows() bool {
+	for _, os := range osFamiliesForPV100 {
+		if p.OS == os {
+			return true
+		}
+	}
+	return false
+}
+
 func (p RuntimePlatformOpts) isEmpty() bool {
 	return p.OS == "" && p.Arch == ""
 }
