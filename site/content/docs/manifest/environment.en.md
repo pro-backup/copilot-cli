@@ -141,6 +141,12 @@ Workload-side effects:
 - Windows Fargate does not support IPv6 task networking. Windows workloads deployed into a dual-stack environment remain IPv4-only and print a one-line `Note:` at deploy time.
 - The environment's shared security group gains a standalone `::/0` IPv6 egress rule so tasks can reach IPv6 destinations.
 
+Load-balancer ingress:
+
+- Copilot also configures the shared public and internal Application Load Balancers to run in `dualstack` mode. LoadBalancedWebService and BackendService aliases get Route 53 `AAAA` records alongside the existing `A` records so clients resolve the service over IPv6.
+- Security group ingress on the shared ALBs is opened for `::/0` (in addition to the existing IPv4 rules). When `http.public.security_groups.ingress` supplies explicit CIDRs, IPv6 CIDRs in that list render as `CidrIpv6` while IPv4 CIDRs continue to render as `CidrIp`.
+- IPv6 ingress is not available for per-workload Network Load Balancers in this release; that is tracked as a follow-up.
+
 Restrictions (foundation release):
 
 - Not supported with `network.vpc.id` (imported VPC).
