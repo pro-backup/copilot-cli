@@ -1090,3 +1090,33 @@ func TestLoadBalancedWebService_Template_IPv6Enabled_RendersAssignIpv6Address(t 
 	require.NoError(t, err)
 	require.Contains(t, tpl, "AssignIpv6Address: ENABLED")
 }
+
+// TestLoadBalancedWebService_IPv6PropagatesToListenerTemplate proves the
+// WorkloadOpts.IPv6Enabled flag reaches the listener template. INTENTIONALLY
+// FAILS until Task 11 lands the AAAA RecordSet in https-listener.yml.
+func TestLoadBalancedWebService_IPv6PropagatesToListenerTemplate(t *testing.T) {
+	conf := LoadBalancedWebServiceConfig{
+		App:                &config.Application{Name: "mockApp"},
+		EnvManifest:        mustEnvManifestWithIPv6(t, true),
+		ArtifactBucketName: "mockBucket",
+		Manifest: manifest.NewLoadBalancedWebService(&manifest.LoadBalancedWebServiceProps{
+			WorkloadProps: &manifest.WorkloadProps{
+				Name:       "frontend",
+				Dockerfile: testDockerfile,
+			},
+			Path: "/",
+			Port: 8080,
+		}),
+		RuntimeConfig: RuntimeConfig{
+			Version:   "v1.29.0",
+			Region:    "us-west-2",
+			AccountID: "123456789012",
+		},
+	}
+	stk, err := NewLoadBalancedWebService(conf)
+	require.NoError(t, err)
+	tpl, err := stk.Template()
+	require.NoError(t, err)
+	require.Contains(t, tpl, "Type: AAAA",
+		"LBWS in IPv6 env must emit AAAA alias records (lands in Task 11)")
+}
