@@ -986,6 +986,7 @@ Outputs:
     Value: "true"
     Export:
       Name: !Sub ${AppName}-${EnvironmentName}-IPv6Enabled
+{{- if not .VPCConfig.Imported }}
   VpcIpv6CidrBlock:
     Description: "The Amazon-provided IPv6 /56 CIDR associated with the VPC."
     Value: !Select [0, !GetAtt VPC.Ipv6CidrBlocks]
@@ -1001,4 +1002,5 @@ Outputs:
     Value: !Join [ ',', [ {{range $ind, $cidr := .VPCConfig.Managed.PrivateSubnetCIDRs}}!Select [0, !GetAtt PrivateSubnet{{inc $ind}}.Ipv6CidrBlocks], {{end}}] ]
     Export:
       Name: !Sub ${AppName}-${EnvironmentName}-PrivateSubnetsIpv6CidrBlocks
+{{- end }}
 {{- end }}
