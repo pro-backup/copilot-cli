@@ -602,3 +602,12 @@ func TestNetworkOpts_IPv6Enabled_Field(t *testing.T) {
 	zero := NetworkOpts{}
 	require.False(t, zero.IPv6Enabled, "zero-value NetworkOpts.IPv6Enabled must be false")
 }
+
+func TestWorkloadOpts_IPv6EnabledField(t *testing.T) {
+	// Regression guard: the field exists on WorkloadOpts at the top level
+	// (not nested under Network). Listener partials reference `.IPv6Enabled`.
+	opts := WorkloadOpts{IPv6Enabled: true}
+	require.True(t, opts.IPv6Enabled)
+	opts.IPv6Enabled = false
+	require.False(t, opts.IPv6Enabled)
+}

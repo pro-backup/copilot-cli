@@ -833,6 +833,7 @@ type WorkloadOpts struct {
 	Publish                  *PublishOpts
 	ServiceDiscoveryEndpoint string
 	ALBEnabled               bool
+	IPv6Enabled              bool // True when env has network.vpc.ipv6.enabled: true. Gates AAAA alias records in https-listener.yml and http-listener.yml.
 	CredentialsParameter     string
 	PermissionsBoundary      string
 
