@@ -199,6 +199,7 @@ func (s *BackendService) Template() (string, error) {
 
 		// ALB configs.
 		ALBEnabled:  s.albEnabled,
+		IPv6Enabled: s.envIPv6Enabled,
 		GracePeriod: s.convertGracePeriod(),
 		ALBListener: albListenerConfig,
 		ImportedALB: importedALBConfig,
