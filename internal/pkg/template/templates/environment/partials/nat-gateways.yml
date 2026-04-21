@@ -47,4 +47,12 @@ PrivateRouteTable{{inc $ind}}Association:
   Properties:
     RouteTableId: !Ref PrivateRouteTable{{inc $ind}}
     SubnetId: !Ref PrivateSubnet{{inc $ind}}
+  {{- if $.VPCConfig.IPv6Enabled }}
+PrivateRouteIPv6{{inc $ind}}:
+  Type: AWS::EC2::Route
+  Properties:
+    RouteTableId: !Ref PrivateRouteTable{{inc $ind}}
+    DestinationIpv6CidrBlock: ::/0
+    EgressOnlyInternetGatewayId: !Ref EgressOnlyInternetGateway
+  {{- end }}
   {{- end}}
