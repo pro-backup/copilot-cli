@@ -70,6 +70,9 @@ PublicSubnet{{inc $ind}}:
   Metadata:
     'aws:copilot:description': 'Public subnet {{inc $ind}} for resources that can access the internet'
   Type: AWS::EC2::Subnet
+  {{- if $.VPCConfig.IPv6Enabled }}
+  DependsOn: VPCCidrBlockIPv6
+  {{- end }}
   Properties:
     CidrBlock: {{$cidr}}
     VpcId: !Ref VPC
@@ -79,15 +82,23 @@ PublicSubnet{{inc $ind}}:
     AvailabilityZone: !Select [ {{$ind}}, !GetAZs '' ]
     {{- end }}
     MapPublicIpOnLaunch: true
+    {{- if $.VPCConfig.IPv6Enabled }}
+    Ipv6CidrBlock: !Select [{{$ind}}, !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 256, 64]]
+    AssignIpv6AddressOnCreation: true
+    {{- end }}
     Tags:
       - Key: Name
         Value: !Sub 'copilot-${AppName}-${EnvironmentName}-pub{{$ind}}'
 {{- end }}
+{{- $publicCount := len .VPCConfig.Managed.PublicSubnetCIDRs }}
 {{- range $ind, $cidr := .VPCConfig.Managed.PrivateSubnetCIDRs }}
 PrivateSubnet{{inc $ind}}:
   Metadata:
     'aws:copilot:description': 'Private subnet {{inc $ind}} for resources with no internet access'
   Type: AWS::EC2::Subnet
+  {{- if $.VPCConfig.IPv6Enabled }}
+  DependsOn: VPCCidrBlockIPv6
+  {{- end }}
   Properties:
     CidrBlock: {{$cidr}}
     VpcId: !Ref VPC
@@ -97,6 +108,10 @@ PrivateSubnet{{inc $ind}}:
     AvailabilityZone: !Select [ {{$ind}}, !GetAZs '' ]
     {{- end }}
     MapPublicIpOnLaunch: false
+    {{- if $.VPCConfig.IPv6Enabled }}
+    Ipv6CidrBlock: !Select [{{add $publicCount $ind}}, !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 256, 64]]
+    AssignIpv6AddressOnCreation: true
+    {{- end }}
     Tags:
       - Key: Name
         Value: !Sub 'copilot-${AppName}-${EnvironmentName}-priv{{$ind}}'
