@@ -332,6 +332,40 @@ func (c *EC2) SubnetIDs(filters ...Filter) ([]string, error) {
 	return subnetIDs, nil
 }
 
+// SubnetsByIDs returns subnets matching the given IDs. Each Subnet contains
+// its associated IPv6 CIDR blocks (only those in state "associated"). Returns
+// an empty slice and no error when ids is empty, avoiding a zero-filter
+// DescribeSubnets call.
+func (c *EC2) SubnetsByIDs(ids []string) ([]Subnet, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	resp, err := c.client.DescribeSubnets(&ec2.DescribeSubnetsInput{
+		SubnetIds: aws.StringSlice(ids),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("describe subnets %v: %w", ids, err)
+	}
+	out := make([]Subnet, 0, len(resp.Subnets))
+	for _, s := range resp.Subnets {
+		var name string
+		for _, tag := range s.Tags {
+			if aws.StringValue(tag.Key) == "Name" {
+				name = aws.StringValue(tag.Value)
+			}
+		}
+		out = append(out, Subnet{
+			Resource: Resource{
+				ID:   aws.StringValue(s.SubnetId),
+				Name: name,
+			},
+			CIDRBlock:      aws.StringValue(s.CidrBlock),
+			IPv6CIDRBlocks: associatedIPv6Blocks(s),
+		})
+	}
+	return out, nil
+}
+
 // SecurityGroups finds the security group IDs with optional filters.
 func (c *EC2) SecurityGroups(filters ...Filter) ([]string, error) {
 	inputFilters := toEC2Filter(filters)

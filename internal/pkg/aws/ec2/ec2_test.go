@@ -1151,3 +1151,53 @@ func TestEC2_HasVPCIPv6_NotFound(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "vpc-a")
 }
+
+func TestEC2_SubnetsByIDs(t *testing.T) {
+	out := &ec2.DescribeSubnetsOutput{Subnets: []*ec2.Subnet{
+		{
+			SubnetId:  aws.String("subnet-1"),
+			CidrBlock: aws.String("10.0.0.0/24"),
+			Ipv6CidrBlockAssociationSet: []*ec2.SubnetIpv6CidrBlockAssociation{
+				{Ipv6CidrBlock: aws.String("2001:db8::/64"), Ipv6CidrBlockState: &ec2.SubnetCidrBlockState{State: aws.String("associated")}},
+			},
+		},
+		{
+			SubnetId:  aws.String("subnet-2"),
+			CidrBlock: aws.String("10.0.1.0/24"),
+		},
+	}}
+	ctrl := gomock.NewController(t)
+	m := mocks.NewMockapi(ctrl)
+	m.EXPECT().DescribeSubnets(&ec2.DescribeSubnetsInput{
+		SubnetIds: aws.StringSlice([]string{"subnet-1", "subnet-2"}),
+	}).Return(out, nil)
+	c := &EC2{client: m}
+
+	got, err := c.SubnetsByIDs([]string{"subnet-1", "subnet-2"})
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	byID := map[string]Subnet{}
+	for _, s := range got {
+		byID[s.ID] = s
+	}
+	require.Equal(t, []string{"2001:db8::/64"}, byID["subnet-1"].IPv6CIDRBlocks)
+	require.Empty(t, byID["subnet-2"].IPv6CIDRBlocks)
+}
+
+func TestEC2_SubnetsByIDs_Empty(t *testing.T) {
+	c := &EC2{client: nil} // never called
+	got, err := c.SubnetsByIDs(nil)
+	require.NoError(t, err)
+	require.Empty(t, got)
+}
+
+func TestEC2_SubnetsByIDs_APIError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	m := mocks.NewMockapi(ctrl)
+	m.EXPECT().DescribeSubnets(gomock.Any()).Return(nil, errors.New("rate exceeded"))
+	c := &EC2{client: m}
+
+	_, err := c.SubnetsByIDs([]string{"subnet-1"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "describe subnets")
+}
