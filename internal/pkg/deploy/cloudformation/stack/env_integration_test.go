@@ -456,3 +456,34 @@ func resetCustomResourceLocations(template map[any]any) {
 		delete(props, "Code")
 	}
 }
+
+func TestEnvStack_IPv6ThreadedFromManifest(t *testing.T) {
+	rawMft := `name: test
+type: Environment
+network:
+  vpc:
+    ipv6:
+      enabled: true
+`
+	var mft manifest.Environment
+	require.NoError(t, yaml.Unmarshal([]byte(rawMft), &mft))
+	envCfg := &stack.EnvConfig{
+		Version: "1.x",
+		App: deploy.AppInformation{
+			AccountPrincipalARN: "arn:aws:iam::000000000:root",
+			Name:                "demo",
+		},
+		Name:                 "test",
+		ArtifactBucketARN:    "arn:aws:s3:::mockbucket",
+		ArtifactBucketKeyARN: "arn:aws:kms:us-west-2:000000000:key/1234abcd-12ab-34cd-56ef-1234567890ab",
+		Mft:                  &mft,
+		RawMft:               rawMft,
+	}
+	envStack, err := stack.NewEnvStackConfig(envCfg)
+	require.NoError(t, err)
+	body, err := envStack.Template()
+	require.NoError(t, err)
+	// Proof the flag reached the template: the EgressOnlyInternetGateway
+	// resource only appears when IPv6Enabled is true.
+	require.Contains(t, body, "EgressOnlyInternetGateway:")
+}

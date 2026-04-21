@@ -531,12 +531,17 @@ func (e *Env) vpcConfig() (template.VPCConfig, error) {
 	if err != nil {
 		return template.VPCConfig{}, err
 	}
+	var ipv6Enabled bool
+	if e.in.Mft != nil {
+		ipv6Enabled = e.in.Mft.Network.VPC.IPv6Enabled()
+	}
 	return template.VPCConfig{
 		Imported:            e.importVPC(),
 		Managed:             e.managedVPC(),
 		AllowVPCIngress:     e.in.Mft.HTTPConfig.Private.HasVPCIngress(),
 		SecurityGroupConfig: securityGroupConfig,
 		FlowLogs:            flowLogs,
+		IPv6Enabled:         ipv6Enabled,
 	}, nil
 }
 
