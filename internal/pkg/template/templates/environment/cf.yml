@@ -335,6 +335,9 @@ Resources:
           Value: false
       {{- end }}
       Scheme: internet-facing
+      {{- if .VPCConfig.IPv6Enabled }}
+      IpAddressType: dualstack
+      {{- end }}
       SecurityGroups: 
         - !GetAtt PublicHTTPLoadBalancerSecurityGroup.GroupId
         - !If [ExportHTTPSListener, !GetAtt PublicHTTPSLoadBalancerSecurityGroup.GroupId, !Ref "AWS::NoValue"]
@@ -416,6 +419,9 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Scheme: internal
+      {{- if .VPCConfig.IPv6Enabled }}
+      IpAddressType: dualstack
+      {{- end }}
       SecurityGroups: [ !GetAtt InternalLoadBalancerSecurityGroup.GroupId ]
 {{- if .PrivateHTTPConfig.CustomALBSubnets}}
       Subnets: {{fmtSlice .PrivateHTTPConfig.CustomALBSubnets}}

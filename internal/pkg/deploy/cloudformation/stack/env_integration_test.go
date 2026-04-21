@@ -519,3 +519,38 @@ network:
 	// resource only appears when IPv6Enabled is true.
 	require.Contains(t, body, "EgressOnlyInternetGateway:")
 }
+
+// TestEnvStack_IPv6ALBsAreDualstack proves the PublicLoadBalancer and
+// InternalLoadBalancer render with IpAddressType: dualstack when the
+// env has network.vpc.ipv6.enabled: true. Regression guard: removing
+// either guard from cf.yml drops the count below 2 and fails the test.
+func TestEnvStack_IPv6ALBsAreDualstack(t *testing.T) {
+	rawMft := `name: test
+type: Environment
+network:
+  vpc:
+    ipv6:
+      enabled: true
+`
+	var mft manifest.Environment
+	require.NoError(t, yaml.Unmarshal([]byte(rawMft), &mft))
+	envCfg := &stack.EnvConfig{
+		Version: "1.x",
+		App: deploy.AppInformation{
+			AccountPrincipalARN: "arn:aws:iam::000000000:root",
+			Name:                "demo",
+		},
+		Name:                 "test",
+		ArtifactBucketARN:    "arn:aws:s3:::mockbucket",
+		ArtifactBucketKeyARN: "arn:aws:kms:us-west-2:000000000:key/1234abcd-12ab-34cd-56ef-1234567890ab",
+		Mft:                  &mft,
+		RawMft:               rawMft,
+	}
+	envStack, err := stack.NewEnvStackConfig(envCfg)
+	require.NoError(t, err)
+	body, err := envStack.Template()
+	require.NoError(t, err)
+	// At least twice: once on PublicLoadBalancer, once on InternalLoadBalancer.
+	require.GreaterOrEqual(t, strings.Count(body, "IpAddressType: dualstack"), 2,
+		"expected IpAddressType: dualstack on both PublicLoadBalancer and InternalLoadBalancer")
+}
