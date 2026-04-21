@@ -32,6 +32,16 @@ DefaultPublicRoute:
     DestinationCidrBlock: 0.0.0.0/0
     GatewayId: !Ref InternetGateway
 
+{{- if .VPCConfig.IPv6Enabled }}
+DefaultPublicRouteIPv6:
+  Type: AWS::EC2::Route
+  DependsOn: InternetGatewayAttachment
+  Properties:
+    RouteTableId: !Ref PublicRouteTable
+    DestinationIpv6CidrBlock: ::/0
+    GatewayId: !Ref InternetGateway
+{{- end }}
+
 InternetGateway:
   Metadata:
     'aws:copilot:description': 'An Internet Gateway to connect to the public internet'
