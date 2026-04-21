@@ -149,8 +149,26 @@ Load-balancer ingress:
 
 Restrictions (foundation release):
 
-- Not supported with `network.vpc.id` (imported VPC).
 - Not supported as an in-place toggle on an existing environment — create a new environment with IPv6 enabled.
+
+Imported VPCs:
+
+IPv6 can be enabled on an environment that imports an existing VPC,
+provided the VPC and every imported public/private subnet already has
+at least one associated IPv6 CIDR block. Copilot validates this at
+`env deploy` time by describing the VPC; if any resource is missing
+IPv6, the command exits with an error naming the resource.
+
+Copilot does not manage IPv6 routing on imported VPCs. Before enabling
+`network.vpc.ipv6.enabled`, ensure your VPC has:
+
+- A `/56` IPv6 CIDR association on the VPC (Amazon-provided or BYOIP).
+- A `/64` IPv6 CIDR association on every subnet you import.
+- An `EgressOnlyInternetGateway` attached to the VPC for private-subnet
+  egress (or an equivalent path such as a Transit Gateway).
+- `::/0` IPv6 routes on the relevant route tables — `::/0 →
+  InternetGateway` for public subnets, `::/0 → EgressOnlyIGW` for
+  private subnets.
 
 <span class="parent-field">network.vpc.</span><a id="network-vpc-subnets" href="#network-vpc-subnets" class="field">`subnets`</a> <span class="type">Map</span>    
 Configure public and private subnets in a VPC.

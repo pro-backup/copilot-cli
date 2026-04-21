@@ -1099,15 +1099,23 @@ func TestEnvironmentHTTPConfig_validate(t *testing.T) {
 	}
 }
 
-func TestEnvironmentVPCConfig_validate_IPv6Imported(t *testing.T) {
+func TestEnvironmentVPCConfig_validate_IPv6ImportedValid(t *testing.T) {
 	trueVal := true
 	cfg := environmentVPCConfig{
-		ID:   aws.String("vpc-12345"),
+		ID:   aws.String("vpc-1234567890"),
 		IPv6: &ipv6VPCConfig{Enabled: &trueVal},
+		Subnets: subnetsConfiguration{
+			Public: []subnetConfiguration{
+				{SubnetID: aws.String("subnet-pub-1")},
+				{SubnetID: aws.String("subnet-pub-2")},
+			},
+			Private: []subnetConfiguration{
+				{SubnetID: aws.String("subnet-priv-1")},
+				{SubnetID: aws.String("subnet-priv-2")},
+			},
+		},
 	}
-	err := cfg.validate()
-	require.Error(t, err)
-	require.ErrorIs(t, err, errIPv6WithImportedVPC)
+	require.NoError(t, cfg.validate())
 }
 
 func TestEnvironmentVPCConfig_validate_IPv6ManagedOK(t *testing.T) {

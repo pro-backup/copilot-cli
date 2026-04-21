@@ -1011,3 +1011,193 @@ func TestEC2_HasDNSSupport(t *testing.T) {
 		})
 	}
 }
+
+func TestEC2_ListVPCSubnets_PopulatesIPv6CIDRBlocks(t *testing.T) {
+	const vpcID = "vpc-abc"
+	mockRouteTables := &ec2.DescribeRouteTablesOutput{
+		RouteTables: []*ec2.RouteTable{
+			{
+				RouteTableId: aws.String("rtb-pub"),
+				Associations: []*ec2.RouteTableAssociation{{SubnetId: aws.String("subnet-pub")}},
+				Routes: []*ec2.Route{{
+					DestinationCidrBlock: aws.String("0.0.0.0/0"),
+					GatewayId:            aws.String("igw-1"),
+				}},
+				VpcId: aws.String(vpcID),
+			},
+			{
+				RouteTableId: aws.String("rtb-main"),
+				Associations: []*ec2.RouteTableAssociation{{Main: aws.Bool(true)}},
+				Routes:       []*ec2.Route{},
+				VpcId:        aws.String(vpcID),
+			},
+		},
+	}
+	mockSubnets := &ec2.DescribeSubnetsOutput{Subnets: []*ec2.Subnet{
+		{
+			SubnetId:  aws.String("subnet-pub"),
+			CidrBlock: aws.String("10.0.0.0/24"),
+			Ipv6CidrBlockAssociationSet: []*ec2.SubnetIpv6CidrBlockAssociation{
+				{
+					Ipv6CidrBlock:      aws.String("2001:db8::/64"),
+					Ipv6CidrBlockState: &ec2.SubnetCidrBlockState{State: aws.String("associated")},
+				},
+				{
+					Ipv6CidrBlock:      aws.String("2001:db8:1::/64"),
+					Ipv6CidrBlockState: &ec2.SubnetCidrBlockState{State: aws.String("disassociated")},
+				},
+			},
+		},
+		{
+			SubnetId:  aws.String("subnet-priv"),
+			CidrBlock: aws.String("10.0.1.0/24"),
+			// No IPv6 association set at all.
+		},
+	}}
+	ctrl := gomock.NewController(t)
+	m := mocks.NewMockapi(ctrl)
+	m.EXPECT().DescribeRouteTables(gomock.Any()).Return(mockRouteTables, nil)
+	m.EXPECT().DescribeSubnets(gomock.Any()).Return(mockSubnets, nil)
+	client := &EC2{client: m}
+
+	out, err := client.ListVPCSubnets(vpcID)
+	require.NoError(t, err)
+
+	subnetsByID := map[string]Subnet{}
+	for _, s := range out.Public {
+		subnetsByID[s.ID] = s
+	}
+	for _, s := range out.Private {
+		subnetsByID[s.ID] = s
+	}
+	require.ElementsMatch(t, []string{"2001:db8::/64"}, subnetsByID["subnet-pub"].IPv6CIDRBlocks,
+		"only associated IPv6 blocks are returned; disassociated is filtered")
+	require.Empty(t, subnetsByID["subnet-priv"].IPv6CIDRBlocks,
+		"subnets with no IPv6 have empty slice, not nil panic")
+}
+
+func TestEC2_HasVPCIPv6(t *testing.T) {
+	testCases := map[string]struct {
+		describeOutput *ec2.DescribeVpcsOutput
+		wantHas        bool
+	}{
+		"no Ipv6CidrBlockAssociationSet at all": {
+			describeOutput: &ec2.DescribeVpcsOutput{Vpcs: []*ec2.Vpc{{VpcId: aws.String("vpc-a")}}},
+			wantHas:        false,
+		},
+		"all associations disassociated": {
+			describeOutput: &ec2.DescribeVpcsOutput{Vpcs: []*ec2.Vpc{{
+				VpcId: aws.String("vpc-a"),
+				Ipv6CidrBlockAssociationSet: []*ec2.VpcIpv6CidrBlockAssociation{
+					{Ipv6CidrBlock: aws.String("2001:db8::/56"), Ipv6CidrBlockState: &ec2.VpcCidrBlockState{State: aws.String("disassociated")}},
+				},
+			}}},
+			wantHas: false,
+		},
+		"one associated, one disassociated": {
+			describeOutput: &ec2.DescribeVpcsOutput{Vpcs: []*ec2.Vpc{{
+				VpcId: aws.String("vpc-a"),
+				Ipv6CidrBlockAssociationSet: []*ec2.VpcIpv6CidrBlockAssociation{
+					{Ipv6CidrBlock: aws.String("2001:db8::/56"), Ipv6CidrBlockState: &ec2.VpcCidrBlockState{State: aws.String("associated")}},
+					{Ipv6CidrBlock: aws.String("2001:db9::/56"), Ipv6CidrBlockState: &ec2.VpcCidrBlockState{State: aws.String("disassociated")}},
+				},
+			}}},
+			wantHas: true,
+		},
+		"associating (not yet associated)": {
+			describeOutput: &ec2.DescribeVpcsOutput{Vpcs: []*ec2.Vpc{{
+				VpcId: aws.String("vpc-a"),
+				Ipv6CidrBlockAssociationSet: []*ec2.VpcIpv6CidrBlockAssociation{
+					{Ipv6CidrBlock: aws.String("2001:db8::/56"), Ipv6CidrBlockState: &ec2.VpcCidrBlockState{State: aws.String("associating")}},
+				},
+			}}},
+			wantHas: false,
+		},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			m := mocks.NewMockapi(ctrl)
+			m.EXPECT().DescribeVpcs(&ec2.DescribeVpcsInput{
+				VpcIds: aws.StringSlice([]string{"vpc-a"}),
+			}).Return(tc.describeOutput, nil)
+			c := &EC2{client: m}
+
+			got, err := c.HasVPCIPv6("vpc-a")
+			require.NoError(t, err)
+			require.Equal(t, tc.wantHas, got)
+		})
+	}
+}
+
+func TestEC2_HasVPCIPv6_APIError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	m := mocks.NewMockapi(ctrl)
+	m.EXPECT().DescribeVpcs(gomock.Any()).Return(nil, errors.New("access denied"))
+	c := &EC2{client: m}
+
+	_, err := c.HasVPCIPv6("vpc-a")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "describe VPC vpc-a")
+}
+
+func TestEC2_HasVPCIPv6_NotFound(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	m := mocks.NewMockapi(ctrl)
+	m.EXPECT().DescribeVpcs(gomock.Any()).Return(&ec2.DescribeVpcsOutput{Vpcs: nil}, nil)
+	c := &EC2{client: m}
+
+	_, err := c.HasVPCIPv6("vpc-a")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "vpc-a")
+}
+
+func TestEC2_SubnetsByIDs(t *testing.T) {
+	out := &ec2.DescribeSubnetsOutput{Subnets: []*ec2.Subnet{
+		{
+			SubnetId:  aws.String("subnet-1"),
+			CidrBlock: aws.String("10.0.0.0/24"),
+			Ipv6CidrBlockAssociationSet: []*ec2.SubnetIpv6CidrBlockAssociation{
+				{Ipv6CidrBlock: aws.String("2001:db8::/64"), Ipv6CidrBlockState: &ec2.SubnetCidrBlockState{State: aws.String("associated")}},
+			},
+		},
+		{
+			SubnetId:  aws.String("subnet-2"),
+			CidrBlock: aws.String("10.0.1.0/24"),
+		},
+	}}
+	ctrl := gomock.NewController(t)
+	m := mocks.NewMockapi(ctrl)
+	m.EXPECT().DescribeSubnets(&ec2.DescribeSubnetsInput{
+		SubnetIds: aws.StringSlice([]string{"subnet-1", "subnet-2"}),
+	}).Return(out, nil)
+	c := &EC2{client: m}
+
+	got, err := c.SubnetsByIDs([]string{"subnet-1", "subnet-2"})
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	byID := map[string]Subnet{}
+	for _, s := range got {
+		byID[s.ID] = s
+	}
+	require.Equal(t, []string{"2001:db8::/64"}, byID["subnet-1"].IPv6CIDRBlocks)
+	require.Empty(t, byID["subnet-2"].IPv6CIDRBlocks)
+}
+
+func TestEC2_SubnetsByIDs_Empty(t *testing.T) {
+	c := &EC2{client: nil} // never called
+	got, err := c.SubnetsByIDs(nil)
+	require.NoError(t, err)
+	require.Empty(t, got)
+}
+
+func TestEC2_SubnetsByIDs_APIError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	m := mocks.NewMockapi(ctrl)
+	m.EXPECT().DescribeSubnets(gomock.Any()).Return(nil, errors.New("rate exceeded"))
+	c := &EC2{client: m}
+
+	_, err := c.SubnetsByIDs([]string{"subnet-1"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "describe subnets")
+}

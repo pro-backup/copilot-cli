@@ -325,6 +325,41 @@ network:
 			}(),
 			wantedFileName: "template-with-ipv6-and-custom-ingress.yml",
 		},
+		"imported VPC with ipv6 dual-stack enabled": {
+			input: func() *stack.EnvConfig {
+				rawMft := `name: test
+type: Environment
+network:
+  vpc:
+    id: vpc-12345
+    ipv6:
+      enabled: true
+    subnets:
+      public:
+        - id: subnet-pub-1
+        - id: subnet-pub-2
+      private:
+        - id: subnet-priv-1
+        - id: subnet-priv-2
+`
+				var mft manifest.Environment
+				err := yaml.Unmarshal([]byte(rawMft), &mft)
+				require.NoError(t, err)
+				return &stack.EnvConfig{
+					Version: "1.x",
+					App: deploy.AppInformation{
+						AccountPrincipalARN: "arn:aws:iam::000000000:root",
+						Name:                "demo",
+					},
+					Name:                 "test",
+					ArtifactBucketARN:    "arn:aws:s3:::mockbucket",
+					ArtifactBucketKeyARN: "arn:aws:kms:us-west-2:000000000:key/1234abcd-12ab-34cd-56ef-1234567890ab",
+					Mft:                  &mft,
+					RawMft:               rawMft,
+				}
+			}(),
+			wantedFileName: "template-with-ipv6-and-imported-vpc.yml",
+		},
 	}
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {

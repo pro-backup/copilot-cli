@@ -15,14 +15,6 @@ import (
 var (
 	errAZsNotEqual = errors.New("public subnets and private subnets do not span the same availability zones")
 
-	// errIPv6WithImportedVPC is returned when a manifest enables IPv6 on an
-	// imported VPC. Imported-VPC IPv6 support is tracked as a follow-up
-	// sub-project (#4).
-	errIPv6WithImportedVPC = errors.New(
-		`IPv6 cannot be enabled on an environment that imports a VPC. ` +
-			`Remove "network.vpc.id" or "network.vpc.ipv6".`,
-	)
-
 	minAZs = 2
 )
 
@@ -94,11 +86,6 @@ func (n environmentNetworkConfig) validate() error {
 func (cfg environmentVPCConfig) validate() error {
 	if cfg.imported() && cfg.managedVPCCustomized() {
 		return errors.New(`cannot import VPC resources (with "id" fields) and customize VPC resources (with "cidr" and "az" fields) at the same time`)
-	}
-	// IPv6Enabled() has a pointer receiver; validate() uses a value receiver,
-	// so take the address explicitly (auto-addressing does not apply here).
-	if cfg.imported() && (&cfg).IPv6Enabled() {
-		return errIPv6WithImportedVPC
 	}
 	if err := cfg.Subnets.validate(); err != nil {
 		return fmt.Errorf(`validate "subnets": %w`, err)

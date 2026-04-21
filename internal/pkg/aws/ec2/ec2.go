@@ -88,7 +88,8 @@ type VPC struct {
 // Subnet contains the ID and name of a subnet.
 type Subnet struct {
 	Resource
-	CIDRBlock string
+	CIDRBlock      string
+	IPv6CIDRBlocks []string
 }
 
 // AZ represents an availability zone.
@@ -240,6 +241,31 @@ func (c *EC2) HasDNSSupport(vpcID string) (bool, error) {
 	return aws.BoolValue(resp.EnableDnsSupport.Value), nil
 }
 
+// HasVPCIPv6 returns true if the given VPC has at least one Ipv6CidrBlockAssociation
+// in state "associated". Associations in states associating, disassociating,
+// disassociated, failing, or failed do not count — the VPC is not yet (or no
+// longer) IPv6-ready.
+func (c *EC2) HasVPCIPv6(vpcID string) (bool, error) {
+	resp, err := c.client.DescribeVpcs(&ec2.DescribeVpcsInput{
+		VpcIds: aws.StringSlice([]string{vpcID}),
+	})
+	if err != nil {
+		return false, fmt.Errorf("describe VPC %s: %w", vpcID, err)
+	}
+	if len(resp.Vpcs) == 0 {
+		return false, fmt.Errorf("VPC %s not found", vpcID)
+	}
+	for _, assoc := range resp.Vpcs[0].Ipv6CidrBlockAssociationSet {
+		if assoc == nil || assoc.Ipv6CidrBlockState == nil {
+			continue
+		}
+		if aws.StringValue(assoc.Ipv6CidrBlockState.State) == ec2.VpcCidrBlockStateCodeAssociated {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // VPCSubnets are all subnets within a VPC.
 type VPCSubnets struct {
 	Public  []Subnet
@@ -277,7 +303,8 @@ func (c *EC2) ListVPCSubnets(vpcID string) (*VPCSubnets, error) {
 				ID:   aws.StringValue(subnet.SubnetId),
 				Name: name,
 			},
-			CIDRBlock: aws.StringValue(subnet.CidrBlock),
+			CIDRBlock:      aws.StringValue(subnet.CidrBlock),
+			IPv6CIDRBlocks: associatedIPv6Blocks(subnet),
 		}
 		if rtIndex.IsPublicSubnet(s.ID) {
 			publicSubnets = append(publicSubnets, s)
@@ -303,6 +330,40 @@ func (c *EC2) SubnetIDs(filters ...Filter) ([]string, error) {
 		subnetIDs[idx] = aws.StringValue(subnet.SubnetId)
 	}
 	return subnetIDs, nil
+}
+
+// SubnetsByIDs returns subnets matching the given IDs. Each Subnet contains
+// its associated IPv6 CIDR blocks (only those in state "associated"). Returns
+// an empty slice and no error when ids is empty, avoiding a zero-filter
+// DescribeSubnets call.
+func (c *EC2) SubnetsByIDs(ids []string) ([]Subnet, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	resp, err := c.client.DescribeSubnets(&ec2.DescribeSubnetsInput{
+		SubnetIds: aws.StringSlice(ids),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("describe subnets %v: %w", ids, err)
+	}
+	out := make([]Subnet, 0, len(resp.Subnets))
+	for _, s := range resp.Subnets {
+		var name string
+		for _, tag := range s.Tags {
+			if aws.StringValue(tag.Key) == "Name" {
+				name = aws.StringValue(tag.Value)
+			}
+		}
+		out = append(out, Subnet{
+			Resource: Resource{
+				ID:   aws.StringValue(s.SubnetId),
+				Name: name,
+			},
+			CIDRBlock:      aws.StringValue(s.CidrBlock),
+			IPv6CIDRBlocks: associatedIPv6Blocks(s),
+		})
+	}
+	return out, nil
 }
 
 // SecurityGroups finds the security group IDs with optional filters.
@@ -493,4 +554,21 @@ func (c *EC2) CloudFrontManagedPrefixListID() (string, error) {
 	}
 
 	return ids[0], nil
+}
+
+// associatedIPv6Blocks returns the Ipv6CidrBlock values whose association state
+// is "associated". Other states (associating, disassociating, disassociated,
+// failing, failed) are excluded — they do not count as IPv6-ready.
+func associatedIPv6Blocks(subnet *ec2.Subnet) []string {
+	var out []string
+	for _, assoc := range subnet.Ipv6CidrBlockAssociationSet {
+		if assoc == nil || assoc.Ipv6CidrBlockState == nil {
+			continue
+		}
+		if aws.StringValue(assoc.Ipv6CidrBlockState.State) != ec2.SubnetCidrBlockStateCodeAssociated {
+			continue
+		}
+		out = append(out, aws.StringValue(assoc.Ipv6CidrBlock))
+	}
+	return out
 }
