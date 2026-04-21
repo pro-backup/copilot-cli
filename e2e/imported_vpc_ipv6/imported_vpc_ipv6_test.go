@@ -72,7 +72,7 @@ var _ = Describe("Imported VPC + IPv6", Ordered, func() {
 		var envDeployErr error
 
 		BeforeAll(func() {
-			patchEnvManifestAddIPv6(appName, envName)
+			patchEnvManifestAddIPv6(envName)
 
 			_, envDeployErr = copilotCLI.EnvDeploy(&client.EnvDeployRequest{
 				AppName: appName,
@@ -193,7 +193,7 @@ var _ = Describe("Imported VPC + IPv6", Ordered, func() {
 // "    ipv6:\n      enabled: true\n" immediately after the "  vpc:\n" header.
 // env init has no --ipv6 flag, so this simulates the user hand-editing the
 // manifest before env deploy.
-func patchEnvManifestAddIPv6(app, env string) {
+func patchEnvManifestAddIPv6(env string) {
 	path := filepath.Join("copilot", "environments", env, "manifest.yml")
 	data, err := os.ReadFile(path)
 	Expect(err).NotTo(HaveOccurred())
