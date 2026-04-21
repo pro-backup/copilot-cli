@@ -237,6 +237,15 @@ Resources:
           CidrIp: {{$securityRule.CidrIP}}
       {{- end }}
 {{- end}}
+{{- if .VPCConfig.IPv6Enabled }}
+  EnvironmentSecurityGroupEgressIPv6:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref EnvironmentSecurityGroup
+      IpProtocol: -1
+      CidrIpv6: ::/0
+      Description: Allow all IPv6 outbound traffic
+{{- end }}
   EnvironmentHTTPSecurityGroupIngressFromPublicALB:
     Type: AWS::EC2::SecurityGroupIngress
     Condition: CreateALB

@@ -836,6 +836,13 @@ Resources:
                   Value: copilot-${AppName}-${EnvironmentName}-env
             VpcId: VPC
         Type: AWS::EC2::SecurityGroup
+    EnvironmentSecurityGroupEgressIPv6:
+        Properties:
+            CidrIpv6: ::/0
+            Description: Allow all IPv6 outbound traffic
+            GroupId: EnvironmentSecurityGroup
+            IpProtocol: -1
+        Type: AWS::EC2::SecurityGroupEgress
     EnvironmentSecurityGroupIngressFromInternalALB:
         Condition: CreateInternalALB
         Properties:
