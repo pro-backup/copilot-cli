@@ -295,7 +295,7 @@ func withEnvParsingFuncs() ParseOption {
 	return func(t *template.Template) *template.Template {
 		return t.Funcs(map[string]interface{}{
 			"inc":               IncFunc,
-			"add":               func(a, b int) int { return a + b },
+			"add":               AddFunc,
 			"fmtSlice":          FmtSliceFunc,
 			"quote":             strconv.Quote,
 			"truncate":          truncate,
