@@ -148,3 +148,27 @@ func TestIsIPv6CIDR(t *testing.T) {
 		})
 	}
 }
+
+func TestWithEnvParsingFuncs_IsIPv6CIDRHelper(t *testing.T) {
+	testCases := map[string]struct {
+		cidr string
+		want string
+	}{
+		"IPv6 default route": {cidr: "::/0", want: "yes"},
+		"IPv6 /128":          {cidr: "2001:db8::1/128", want: "yes"},
+		"IPv4 default route": {cidr: "0.0.0.0/0", want: "no"},
+		"IPv4 /8":            {cidr: "10.0.0.0/8", want: "no"},
+		"garbage":            {cidr: "not-a-cidr", want: "no"},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			tpl := template.New("t")
+			tpl = withEnvParsingFuncs()(tpl)
+			parsed, err := tpl.Parse(fmt.Sprintf(`{{ if isIPv6CIDR %q }}yes{{ else }}no{{ end }}`, tc.cidr))
+			require.NoError(t, err)
+			var buf bytes.Buffer
+			require.NoError(t, parsed.Execute(&buf, nil))
+			require.Equal(t, tc.want, buf.String())
+		})
+	}
+}

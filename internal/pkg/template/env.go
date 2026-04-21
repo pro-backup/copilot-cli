@@ -296,6 +296,7 @@ func withEnvParsingFuncs() ParseOption {
 		return t.Funcs(map[string]interface{}{
 			"inc":               IncFunc,
 			"add":               AddFunc,
+			"isIPv6CIDR":        IsIPv6CIDR,
 			"fmtSlice":          FmtSliceFunc,
 			"quote":             strconv.Quote,
 			"truncate":          truncate,
