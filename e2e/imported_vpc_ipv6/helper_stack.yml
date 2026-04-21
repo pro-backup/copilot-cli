@@ -1,0 +1,178 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Prerequisite networking for the imported-VPC IPv6 E2E suite.
+
+Resources:
+  # --- Dual-stack VPC (positive scenario) ---
+  DualStackVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.99.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+
+  DualStackIPv6:
+    Type: AWS::EC2::VPCCidrBlock
+    Properties:
+      VpcId: !Ref DualStackVPC
+      AmazonProvidedIpv6CidrBlock: true
+
+  DualStackIGW:
+    Type: AWS::EC2::InternetGateway
+
+  DualStackIGWAttach:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref DualStackVPC
+      InternetGatewayId: !Ref DualStackIGW
+
+  DualStackEOIGW:
+    Type: AWS::EC2::EgressOnlyInternetGateway
+    Properties:
+      VpcId: !Ref DualStackVPC
+
+  DualStackPublicSubnet1:
+    Type: AWS::EC2::Subnet
+    DependsOn: DualStackIPv6
+    Properties:
+      VpcId: !Ref DualStackVPC
+      CidrBlock: 10.99.0.0/24
+      Ipv6CidrBlock: !Select [0, !Cidr [!Select [0, !GetAtt DualStackVPC.Ipv6CidrBlocks], 256, 64]]
+      AssignIpv6AddressOnCreation: true
+      AvailabilityZone: !Select [0, !GetAZs '']
+
+  DualStackPublicSubnet2:
+    Type: AWS::EC2::Subnet
+    DependsOn: DualStackIPv6
+    Properties:
+      VpcId: !Ref DualStackVPC
+      CidrBlock: 10.99.1.0/24
+      Ipv6CidrBlock: !Select [1, !Cidr [!Select [0, !GetAtt DualStackVPC.Ipv6CidrBlocks], 256, 64]]
+      AssignIpv6AddressOnCreation: true
+      AvailabilityZone: !Select [1, !GetAZs '']
+
+  DualStackPrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    DependsOn: DualStackIPv6
+    Properties:
+      VpcId: !Ref DualStackVPC
+      CidrBlock: 10.99.2.0/24
+      Ipv6CidrBlock: !Select [2, !Cidr [!Select [0, !GetAtt DualStackVPC.Ipv6CidrBlocks], 256, 64]]
+      AssignIpv6AddressOnCreation: true
+      AvailabilityZone: !Select [0, !GetAZs '']
+
+  DualStackPrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    DependsOn: DualStackIPv6
+    Properties:
+      VpcId: !Ref DualStackVPC
+      CidrBlock: 10.99.3.0/24
+      Ipv6CidrBlock: !Select [3, !Cidr [!Select [0, !GetAtt DualStackVPC.Ipv6CidrBlocks], 256, 64]]
+      AssignIpv6AddressOnCreation: true
+      AvailabilityZone: !Select [1, !GetAZs '']
+
+  DualStackPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref DualStackVPC
+
+  DualStackPublicRouteV4:
+    Type: AWS::EC2::Route
+    DependsOn: DualStackIGWAttach
+    Properties:
+      RouteTableId: !Ref DualStackPublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref DualStackIGW
+
+  DualStackPublicRouteV6:
+    Type: AWS::EC2::Route
+    DependsOn: DualStackIGWAttach
+    Properties:
+      RouteTableId: !Ref DualStackPublicRouteTable
+      DestinationIpv6CidrBlock: ::/0
+      GatewayId: !Ref DualStackIGW
+
+  DualStackPublicSubnet1Assoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref DualStackPublicRouteTable
+      SubnetId: !Ref DualStackPublicSubnet1
+
+  DualStackPublicSubnet2Assoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref DualStackPublicRouteTable
+      SubnetId: !Ref DualStackPublicSubnet2
+
+  DualStackPrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref DualStackVPC
+
+  DualStackPrivateRouteV6:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref DualStackPrivateRouteTable
+      DestinationIpv6CidrBlock: ::/0
+      EgressOnlyInternetGatewayId: !Ref DualStackEOIGW
+
+  DualStackPrivateSubnet1Assoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref DualStackPrivateRouteTable
+      SubnetId: !Ref DualStackPrivateSubnet1
+
+  DualStackPrivateSubnet2Assoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref DualStackPrivateRouteTable
+      SubnetId: !Ref DualStackPrivateSubnet2
+
+  # --- IPv4-only VPC (negative scenario) ---
+  V4OnlyVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.98.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+
+  V4OnlyPublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref V4OnlyVPC
+      CidrBlock: 10.98.0.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+
+  V4OnlyPublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref V4OnlyVPC
+      CidrBlock: 10.98.1.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+
+  V4OnlyPrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref V4OnlyVPC
+      CidrBlock: 10.98.2.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+
+  V4OnlyPrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref V4OnlyVPC
+      CidrBlock: 10.98.3.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+
+Outputs:
+  DualStackVPCID:
+    Value: !Ref DualStackVPC
+  DualStackPublicSubnetIDs:
+    Value: !Join [',', [!Ref DualStackPublicSubnet1, !Ref DualStackPublicSubnet2]]
+  DualStackPrivateSubnetIDs:
+    Value: !Join [',', [!Ref DualStackPrivateSubnet1, !Ref DualStackPrivateSubnet2]]
+  V4OnlyVPCID:
+    Value: !Ref V4OnlyVPC
+  V4OnlyPublicSubnetIDs:
+    Value: !Join [',', [!Ref V4OnlyPublicSubnet1, !Ref V4OnlyPublicSubnet2]]
+  V4OnlyPrivateSubnetIDs:
+    Value: !Join [',', [!Ref V4OnlyPrivateSubnet1, !Ref V4OnlyPrivateSubnet2]]
