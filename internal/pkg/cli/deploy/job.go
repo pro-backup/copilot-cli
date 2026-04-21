@@ -105,6 +105,7 @@ func (d *jobDeployer) stackConfiguration(in *StackRuntimeConfiguration) (*jobSta
 	default:
 		conf, err = stack.NewScheduledJob(stack.ScheduledJobConfig{
 			App:                d.app,
+			EnvManifest:        d.envConfig,
 			Env:                d.env.Name,
 			Manifest:           d.jobMft,
 			RawManifest:        d.rawMft,
