@@ -457,6 +457,11 @@ func resetCustomResourceLocations(template map[any]any) {
 	}
 }
 
+// TestEnvStack_IPv6ThreadedFromManifest proves the IPv6 flag reaches the
+// env CFN template. INTENTIONALLY FAILS until Task 5 lands the
+// EgressOnlyInternetGateway resource. Once that resource is emitted
+// conditionally on IPv6Enabled, this test passes and the wiring is proven
+// end-to-end.
 func TestEnvStack_IPv6ThreadedFromManifest(t *testing.T) {
 	rawMft := `name: test
 type: Environment
