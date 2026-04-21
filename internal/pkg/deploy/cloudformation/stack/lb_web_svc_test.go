@@ -1047,3 +1047,21 @@ func TestLoadBalancedWebService_Tags(t *testing.T) {
 		},
 	}, tags)
 }
+
+func TestLoadBalancedWebService_envIPv6EnabledPropagatesToNetworkOpts(t *testing.T) {
+	conf := LoadBalancedWebServiceConfig{
+		App:         &config.Application{Name: "mockApp"},
+		EnvManifest: mustEnvManifestWithIPv6(t, true),
+		Manifest: manifest.NewLoadBalancedWebService(&manifest.LoadBalancedWebServiceProps{
+			WorkloadProps: &manifest.WorkloadProps{
+				Name:       "frontend",
+				Dockerfile: testDockerfile,
+			},
+			Port: 80,
+		}),
+		RuntimeConfig: RuntimeConfig{Version: "v1.29.0"},
+	}
+	got, err := NewLoadBalancedWebService(conf)
+	require.NoError(t, err)
+	require.True(t, got.envIPv6Enabled, "LoadBalancedWebService.envIPv6Enabled must be set from envManifest.Network.VPC.IPv6Enabled()")
+}

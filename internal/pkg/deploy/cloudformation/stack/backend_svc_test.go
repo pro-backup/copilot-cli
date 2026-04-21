@@ -694,3 +694,21 @@ func TestBackendService_Parameters(t *testing.T) {
 		},
 	}, params)
 }
+
+func TestBackendService_envIPv6EnabledPropagatesToNetworkOpts(t *testing.T) {
+	conf := BackendServiceConfig{
+		App:         &config.Application{Name: "mockApp"},
+		EnvManifest: mustEnvManifestWithIPv6(t, true),
+		Manifest: manifest.NewBackendService(manifest.BackendServiceProps{
+			WorkloadProps: manifest.WorkloadProps{
+				Name:       "api",
+				Dockerfile: testDockerfile,
+			},
+			Port: 8080,
+		}),
+		RuntimeConfig: RuntimeConfig{Version: "v1.29.0"},
+	}
+	got, err := NewBackendService(conf)
+	require.NoError(t, err)
+	require.True(t, got.envIPv6Enabled, "BackendService.envIPv6Enabled must be set from envManifest.Network.VPC.IPv6Enabled()")
+}

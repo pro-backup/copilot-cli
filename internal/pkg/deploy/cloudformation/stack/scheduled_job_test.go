@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/copilot-cli/internal/pkg/addon"
+	"github.com/aws/copilot-cli/internal/pkg/config"
 	"github.com/aws/copilot-cli/internal/pkg/deploy/cloudformation/stack/mocks"
 	"github.com/aws/copilot-cli/internal/pkg/manifest"
 	"github.com/aws/copilot-cli/internal/pkg/manifest/manifestinfo"
@@ -612,4 +613,23 @@ func TestScheduledJob_SerializedParameters(t *testing.T) {
     "owner": "boss"
   }
 }`)
+}
+
+func TestScheduledJob_envIPv6EnabledPropagatesToNetworkOpts(t *testing.T) {
+	conf := ScheduledJobConfig{
+		App:         &config.Application{Name: "mockApp"},
+		EnvManifest: mustEnvManifestWithIPv6(t, true),
+		Env:         "test",
+		Manifest: manifest.NewScheduledJob(&manifest.ScheduledJobProps{
+			WorkloadProps: &manifest.WorkloadProps{
+				Name:       "mailer",
+				Dockerfile: "mailer/Dockerfile",
+			},
+			Schedule: "@daily",
+		}),
+		RuntimeConfig: RuntimeConfig{Version: "v1.29.0"},
+	}
+	got, err := NewScheduledJob(conf)
+	require.NoError(t, err)
+	require.True(t, got.envIPv6Enabled, "ScheduledJob.envIPv6Enabled must be set from envManifest.Network.VPC.IPv6Enabled()")
 }
