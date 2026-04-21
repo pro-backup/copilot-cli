@@ -594,3 +594,11 @@ func Test_truncateWithHashPadding(t *testing.T) {
 		})
 	}
 }
+
+func TestNetworkOpts_IPv6Enabled_Field(t *testing.T) {
+	opts := NetworkOpts{IPv6Enabled: true}
+	require.True(t, opts.IPv6Enabled, "NetworkOpts.IPv6Enabled must be a settable bool field")
+
+	zero := NetworkOpts{}
+	require.False(t, zero.IPv6Enabled, "zero-value NetworkOpts.IPv6Enabled must be false")
+}

@@ -707,6 +707,10 @@ type NetworkOpts struct {
 	SubnetsType              string
 	SubnetIDs                []string
 	DenyDefaultSecurityGroup bool
+	// IPv6Enabled controls whether the rendered AwsvpcConfiguration sets
+	// AssignIpv6Address: ENABLED. It is derived from the env manifest's
+	// network.vpc.ipv6.enabled field at stack-construction time.
+	IPv6Enabled bool
 }
 
 // SecurityGroup represents the ID of an additional security group associated with the tasks.
