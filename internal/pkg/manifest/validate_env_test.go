@@ -1098,3 +1098,42 @@ func TestEnvironmentHTTPConfig_validate(t *testing.T) {
 		})
 	}
 }
+
+func TestEnvironmentVPCConfig_validate_IPv6Imported(t *testing.T) {
+	trueVal := true
+	cfg := environmentVPCConfig{
+		ID:   aws.String("vpc-12345"),
+		IPv6: &ipv6VPCConfig{Enabled: &trueVal},
+	}
+	err := cfg.validate()
+	require.Error(t, err)
+	require.ErrorIs(t, err, errIPv6WithImportedVPC)
+}
+
+func TestEnvironmentVPCConfig_validate_IPv6ManagedOK(t *testing.T) {
+	trueVal := true
+	cfg := environmentVPCConfig{
+		IPv6: &ipv6VPCConfig{Enabled: &trueVal},
+	}
+	require.NoError(t, cfg.validate())
+}
+
+func TestEnvironmentVPCConfig_validate_IPv6DisabledWithImport(t *testing.T) {
+	falseVal := false
+	cfg := environmentVPCConfig{
+		ID:   aws.String("vpc-12345"),
+		IPv6: &ipv6VPCConfig{Enabled: &falseVal},
+		Subnets: subnetsConfiguration{
+			Public: []subnetConfiguration{
+				{SubnetID: aws.String("subnet-1")},
+				{SubnetID: aws.String("subnet-2")},
+			},
+			Private: []subnetConfiguration{
+				{SubnetID: aws.String("subnet-3")},
+				{SubnetID: aws.String("subnet-4")},
+			},
+		},
+	}
+	// imported VPC with ipv6 disabled is fine
+	require.NoError(t, cfg.validate())
+}
