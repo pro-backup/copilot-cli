@@ -28,10 +28,12 @@ inherit the same IPv6 behavior #2 and #3 delivered on managed VPCs.
    `network.vpc.id: vpc-xxx` + `network.vpc.ipv6.enabled: true` is a
    valid manifest.
 2. Add a pre-flight EC2-backed validator in the `cli` package that runs
-   during `env init` and `env deploy` and hard-fails if the imported VPC
-   or any imported subnet lacks an associated IPv6 CIDR block. The user
-   sees a crisp, actionable error before any CloudFormation call is
-   made.
+   during `env deploy` and hard-fails if the imported VPC or any
+   imported subnet lacks an associated IPv6 CIDR block. The user sees
+   a crisp, actionable error before any CloudFormation call is made.
+   (`env init` has no IPv6 flag today; users enable IPv6 by editing
+   the written manifest, so the check fires at the first command that
+   actually requests IPv6.)
 3. End-to-end: a Linux workload deployed into an imported + IPv6 env
    gets a dualstack task ENI, and the shared copilot ALB serves
    dualstack with AAAA records — the same behavior #2 and #3 already
@@ -180,22 +182,29 @@ the offending VPC ID or subnet ID list in the user-facing message.
   entries in state `associated`. No new network call; the existing
   `ec2.subnets()` helper already invokes `DescribeSubnets`.
 
-### Wiring into env init and env deploy
+### Wiring: env deploy only (env init is not an IPv6 enablement point today)
 
-`env init` already holds an `ec2Client` field
-(`internal/pkg/cli/env_init.go:169`), lazily initialized via
-`ec2.New(o.sess)` before existing subnet-selection checks. `env deploy`
-does **not** yet hold one; this spec plumbs a matching `ec2Client
-ec2Client` field onto `deployEnvOpts`, initialized the same lazy way
-the existing clients on that struct are
-(`deployEnvOpts.newEnvDescriber`, etc.). Reusing the existing
+**Clarification after implementation.** `copilot env init` does not
+expose any IPv6 flag; users who want an imported-VPC + IPv6 env run
+`env init` to capture the VPC/subnet imports, then hand-edit the
+written manifest to add `network.vpc.ipv6.enabled: true` before
+running `env deploy`. Adding an `--ipv6` flag to `env init` is out of
+scope for this sub-project. Consequently, the pre-flight readiness
+check is wired into `env deploy` only — `env init` writes the manifest
+without running the EC2 describe. A v4-only imported VPC will be
+caught at `env deploy` time (the first command where IPv6 is actually
+requested).
+
+`env deploy` does not yet hold an `ec2Client`; this spec plumbs one
+in via a lazy factory field on `deployEnvOpts`, mirroring how
+`newEnvDescriber` and peers are wired. Reusing the existing
 `ec2Client` interface in `internal/pkg/cli/interfaces.go` keeps the
 mock surface unchanged for other tests.
 
-Two changes, one per command:
+One change:
 
 ```go
-// pseudocode in env_init.go Validate() / end of Ask()
+// pseudocode in env_deploy.go Execute() after validateIPv6Toggle()
 if manifest.Network.VPC.imported() && manifest.Network.VPC.IPv6Enabled() {
     subnetIDs := collectImportedSubnetIDs(manifest)
     if err := validateImportedVPCIPv6Readiness(o.ec2Client, *manifest.Network.VPC.ID, subnetIDs); err != nil {
@@ -204,7 +213,7 @@ if manifest.Network.VPC.imported() && manifest.Network.VPC.IPv6Enabled() {
 }
 ```
 
-Identical block in `env_deploy.go`. ~15 LOC per call site.
+~15 LOC at the call site plus the lazy factory on `deployEnvOpts`.
 
 ### Template and stack layers
 
