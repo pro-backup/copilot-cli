@@ -529,6 +529,59 @@ func TestEcsServiceResourceComponent_Listen(t *testing.T) {
 		<-c.done // Wait for listen to exit.
 		require.NotNil(t, c.deploymentRenderer, "expected the deployment renderer to be initialized")
 	})
+	t.Run("should not start a second deployment renderer for the eventual consistency check event", func(t *testing.T) {
+		// GIVEN
+		ch := make(chan stream.StackEvent)
+		resourceDone := make(chan struct{})
+		var renderersCreated int
+		c := &ecsServiceResourceComponent{
+			cfnStream: ch,
+			logicalID: "Service",
+			group:     new(errgroup.Group),
+			ctx:       context.Background(),
+			done:      make(chan struct{}),
+			resourceRenderer: &mockDynamicRenderer{
+				done: resourceDone,
+			},
+			newDeploymentRender: func(s string, t time.Time) DynamicRenderer {
+				renderersCreated += 1
+				done := make(chan struct{})
+				close(done)
+				return &mockDynamicRenderer{
+					done: done,
+				}
+			},
+		}
+
+		// WHEN
+		go c.Listen()
+		go func() {
+			ch <- stream.StackEvent{
+				LogicalResourceID:  "Service",
+				PhysicalResourceID: "arn:aws:ecs:us-west-2:1111:service/webapp-test-Cluster/webapp-test-frontend",
+				ResourceStatus:     "UPDATE_IN_PROGRESS",
+			}
+			// CloudFormation emits a second in-progress event right before UPDATE_COMPLETE once the ECS deployment
+			// has already finished; starting a new streamer from its timestamp would never observe the deployment.
+			ch <- stream.StackEvent{
+				LogicalResourceID:    "Service",
+				PhysicalResourceID:   "arn:aws:ecs:us-west-2:1111:service/webapp-test-Cluster/webapp-test-frontend",
+				ResourceStatus:       "UPDATE_IN_PROGRESS",
+				ResourceStatusReason: "Eventual consistency check initiated",
+			}
+			ch <- stream.StackEvent{
+				LogicalResourceID:  "Service",
+				PhysicalResourceID: "arn:aws:ecs:us-west-2:1111:service/webapp-test-Cluster/webapp-test-frontend",
+				ResourceStatus:     "UPDATE_COMPLETE",
+			}
+			close(resourceDone)
+			close(ch)
+		}()
+
+		// THEN
+		<-c.done // Wait for listen to exit.
+		require.Equal(t, 1, renderersCreated, "expected exactly one deployment renderer")
+	})
 	t.Run("should not create a deployment renderer if the service never goes in create or update in progress", func(t *testing.T) {
 		// GIVEN
 		ch := make(chan stream.StackEvent)

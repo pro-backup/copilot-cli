@@ -350,6 +350,12 @@ func (c *ecsServiceResourceComponent) Listen() {
 				// The first event doesn't have a service name yet, the second one has.
 				continue
 			}
+			if isEventualConsistencyCheck(ev) {
+				// CloudFormation emits this in-progress event after the ECS deployment already completed, right
+				// before the resource goes to *_COMPLETE. A streamer started from its timestamp would consider the
+				// deployment stale and poll ECS until the stack wait times out.
+				continue
+			}
 			// Start a deployment renderer if a service deployment is happening.
 			renderer := c.newDeploymentRender(ev.PhysicalResourceID, ev.Timestamp)
 			c.mu.Lock()
@@ -414,6 +420,12 @@ func (c *ecsServiceResourceComponent) newListeningRollingUpdateRenderer(serviceA
 		return stream.Stream(c.ctx, streamer)
 	})
 	return renderer
+}
+
+// isEventualConsistencyCheck returns true if the event is CloudFormation's post-update consistency probe
+// rather than the start of a resource update.
+func isEventualConsistencyCheck(ev stream.StackEvent) bool {
+	return strings.Contains(strings.ToLower(ev.ResourceStatusReason), "eventual consistency check")
 }
 
 func updateComponentStatus(mu *sync.Mutex, statuses *[]cfnStatus, newStatus cfnStatus) {
