@@ -4,6 +4,7 @@
 package file
 
 import (
+	"errors"
 	"io/fs"
 	"path/filepath"
 
@@ -85,8 +86,20 @@ func (rw *RecursiveWatcher) start() {
 			return
 		case event := <-rw.fsnotifyWatcher.Events:
 			// handle recursive watch
-			switch event.Op {
-			case fsnotify.Create:
+			switch {
+			case event.Op.Has(fsnotify.Rename):
+				// On Linux, inotify watches follow the inode: when a watched
+				// directory is renamed, the kernel keeps the same watch descriptor.
+				// fsnotify removes that watch asynchronously when it sees
+				// IN_MOVE_SELF, which races with the Add below for the new name.
+				// If Add wins, inotify returns the existing descriptor, fsnotify
+				// keeps the stale path, and the subsequent removal drops the watch
+				// for the new name too. Removing the old path synchronously here
+				// ensures the Add for the new name always registers a fresh watch.
+				if err := rw.fsnotifyWatcher.Remove(event.Name); err != nil && !errors.Is(err, fsnotify.ErrNonExistentWatch) {
+					rw.errors <- err
+				}
+			case event.Op.Has(fsnotify.Create):
 				if err := rw.Add(event.Name); err != nil {
 					rw.errors <- err
 				}
